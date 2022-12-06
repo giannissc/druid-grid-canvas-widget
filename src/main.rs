@@ -6,7 +6,7 @@ use druid::widget::{Flex, Label, MainAxisAlignment, CrossAxisAlignment, Switch,}
 
 use druid_color_thesaurus::*;
 
-use druid_grid_graph_widget::{Grid, GridWidgetData, GridWidget, GridRunner};
+use druid_grid_graph_widget::{GridWidgetData, GridWidget, GridRunner};
 
 //////////////////////////////////////////////////////////////////////////////////////
 // Constants
@@ -119,7 +119,7 @@ fn main() {
     let data = AppData {
         is_paused: false,
         is_running: false,
-        grid_data: GridWidgetData::new(Grid::new(), GridNodeType::Wall(1)),
+        grid_data: GridWidgetData::new(GridNodeType::Wall(1)),
         updates_per_second: 10.0,
     };
 

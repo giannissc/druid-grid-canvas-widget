@@ -110,13 +110,13 @@ pub trait GridRunner: Clone{
 //
 //////////////////////////////////////////////////////////////////////////////////////
 #[derive(Clone, PartialEq, Data, Lens)]
-pub struct Grid<T:GridRunner + PartialEq>{
+struct Grid<T:GridRunner + PartialEq>{
     storage: HashMap<GridNodePosition, T>,
     change_tracker: HashSet<GridNodePosition>,
 }
 
 impl<T:GridRunner + PartialEq> Grid<T>{
-    pub fn new() -> Grid<T>{
+    fn new() -> Grid<T>{
         let storage = HashMap::new();
         let change_tracker = HashSet::new();
         Grid {
@@ -219,19 +219,19 @@ pub enum GridAction{
 //////////////////////////////////////////////////////////////////////////////////////
 #[derive(Clone, PartialEq, Data, Lens)]
 pub struct GridWidgetData<T:GridRunner + PartialEq>{
-    pub grid: Grid<T>,
+    grid: Grid<T>,
     pub show_grid_axis: bool,
     pub action: GridAction,
     pub node_type: T,
 }
 
 impl<T:GridRunner + PartialEq> GridWidgetData<T>{
-    pub fn new(grid: Grid<T>, node: T) -> Self {
+    pub fn new(initial_node: T) -> Self {
         GridWidgetData {
-            grid: grid,
+            grid: Grid::new(),
             show_grid_axis: true,
             action: GridAction::Dynamic,
-            node_type: node,
+            node_type: initial_node,
         }
     }
 }
