@@ -17,7 +17,7 @@ use druid_color_thesaurus::*;
 pub const SET_DISABLED: Selector = Selector::new("disabled-grid-state");
 pub const SET_ENABLED: Selector = Selector::new("idle-grid-state");
 pub const RESET: Selector = Selector::new("RESET");
-pub const CLEAR_STORE: Selector = Selector::new("CLEAR");
+pub const CLEAR_TRACKER: Selector = Selector::new("CLEAR");
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -112,19 +112,16 @@ pub trait GridRunner: Clone{
 #[derive(Clone, PartialEq, Data, Lens)]
 pub struct Grid<T:GridRunner + PartialEq>{
     storage: HashMap<GridNodePosition, T>,
-    addition_storage: HashSet<GridNodePosition>,
-    deletion_storage: HashSet<GridNodePosition>,
+    change_tracker: HashSet<GridNodePosition>,
 }
 
 impl<T:GridRunner + PartialEq> Grid<T>{
     pub fn new() -> Grid<T>{
         let storage = HashMap::new();
-        let addition_storage = HashSet::new();
-        let deletion_storage = HashSet::new();
+        let change_tracker = HashSet::new();
         Grid {
             storage: storage,
-            addition_storage,
-            deletion_storage,
+            change_tracker,
         }
     }
 
@@ -132,21 +129,16 @@ impl<T:GridRunner + PartialEq> Grid<T>{
         self.storage.get(key)
     }
 
-    pub fn get_additions(&self) -> HashSet<GridNodePosition> {
-        self.addition_storage.clone()
-    }
-
-    pub fn get_deletions(&self) -> HashSet<GridNodePosition> {
-        self.deletion_storage.clone()
+    pub fn get_changes(&self) -> HashSet<GridNodePosition> {
+        self.change_tracker.clone()
     }
 
     pub fn iter(&self) -> Iter<GridNodePosition, T>{
         self.storage.iter()
     }
 
-    pub fn clear_store(&mut self) {
-        self.addition_storage.clear();
-        self.deletion_storage.clear();
+    pub fn clear_tracker(&mut self) {
+        self.change_tracker.clear();
     }
 
     pub fn clear_all(&mut self) {}
@@ -159,7 +151,7 @@ impl<T:GridRunner + PartialEq> Grid<T>{
         if item.can_add(self.storage.get(pos)){
             
             self.storage.insert(*pos, item.clone());
-            self.addition_storage.insert(*pos);
+            self.change_tracker.insert(*pos);
         } 
     }
 
@@ -170,7 +162,7 @@ impl<T:GridRunner + PartialEq> Grid<T>{
             Some(item) => {
                 if item.can_remove(){
                     let val = self.storage.remove(pos);
-                    self.deletion_storage.insert(*pos);
+                    self.change_tracker.insert(*pos);
                     return val;
                 }
             }
@@ -184,8 +176,8 @@ impl<T:GridRunner + PartialEq> Grid<T>{
         if item.can_move(other) {
             let item = self.storage.remove(from).unwrap();
             self.storage.insert(*to, item);
-            self.deletion_storage.insert(*from);
-            self.addition_storage.insert(*to);
+            self.change_tracker.insert(*from);
+            self.change_tracker.insert(*to);
             return true;
         }
         return false;
@@ -319,8 +311,8 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                             self.state = GridState::Disabled;
                         } else if cmd.is(RESET) {
                             data.grid.clear_only();
-                        } else if cmd.is(CLEAR_STORE) {
-                            data.grid.clear_store();
+                        } else if cmd.is(CLEAR_TRACKER) {
+                            data.grid.clear_tracker();
                         }
                     },
         
@@ -485,15 +477,10 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
             //debug!("Painting the whole window on grid axis change");
             ctx.request_paint();
         } else {
-            for cell in data.grid.get_additions().iter() {
+            for cell in data.grid.get_changes().iter() {
                 ctx.request_paint_rect(self.invalidation_area(*cell));
             }
-
-            for cell in data.grid.get_deletions().iter() {
-                ctx.request_paint_rect(self.invalidation_area(*cell));
-            }
-
-            ctx.submit_command(CLEAR_STORE);
+            ctx.submit_command(CLEAR_TRACKER);
         }
     }
 
