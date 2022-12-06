@@ -1,10 +1,9 @@
 use std::marker::PhantomData;
 
-use druid::{
-    im::Vector, BoxConstraints, Data, Env, Event, EventCtx, LayoutCtx, Lens, LifeCycle,
+use druid::{BoxConstraints, Data, Env, Event, EventCtx, LayoutCtx, Lens, LifeCycle,
     LifeCycleCtx, PaintCtx, RenderContext, UpdateCtx, Widget, Selector, Point, Rect, Size, Color, MouseButton};
 
-use druid::im::{HashMap, HashSet, hashmap::Iter};
+use druid::im::{HashMap, Vector};
 
 use druid_color_thesaurus::*;
 
@@ -17,7 +16,7 @@ use druid_color_thesaurus::*;
 pub const SET_DISABLED: Selector = Selector::new("disabled-grid-state");
 pub const SET_ENABLED: Selector = Selector::new("idle-grid-state");
 pub const RESET: Selector = Selector::new("RESET");
-pub const CLEAR_TRACKER: Selector = Selector::new("CLEAR");
+pub const SUBMIT_COMMAND_QUEUE: Selector = Selector::new("CLEAR");
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -109,6 +108,8 @@ pub trait GridRunner: Clone{
 // Grid
 //
 //////////////////////////////////////////////////////////////////////////////////////
+
+/*
 #[derive(Clone, PartialEq, Data, Lens)]
 struct Grid<T:GridRunner + PartialEq>{
     storage: HashMap<GridNodePosition, T>,
@@ -149,7 +150,6 @@ impl<T:GridRunner + PartialEq> Grid<T>{
 
     fn add_node(&mut self, pos: &GridNodePosition, item: &T){
         if item.can_add(self.storage.get(pos)){
-            
             self.storage.insert(*pos, item.clone());
             self.change_tracker.insert(*pos);
         } 
@@ -183,7 +183,7 @@ impl<T:GridRunner + PartialEq> Grid<T>{
         return false;
     }
 }
-
+*/
 //////////////////////////////////////////////////////////////////////////////////////
 //
 // GridState
@@ -202,7 +202,7 @@ pub enum GridState{
 // GridAction
 //
 //////////////////////////////////////////////////////////////////////////////////////
-/// 
+
 #[derive(Clone, PartialEq, Data, Debug)]
 pub enum GridAction{
     Dynamic,
@@ -214,12 +214,25 @@ pub enum GridAction{
 
 //////////////////////////////////////////////////////////////////////////////////////
 //
+// CommandItem
+//
+//////////////////////////////////////////////////////////////////////////////////////
+#[derive(Clone, PartialEq, Data, Debug)]
+pub enum CommandItem<T>{
+    Add(GridNodePosition, T),
+    Remove(GridNodePosition, T),
+    Move(GridNodePosition, GridNodePosition, T),
+}
+
+//////////////////////////////////////////////////////////////////////////////////////
+//
 // GridWidgetData
 //
 //////////////////////////////////////////////////////////////////////////////////////
 #[derive(Clone, PartialEq, Data, Lens)]
 pub struct GridWidgetData<T:GridRunner + PartialEq>{
-    grid: Grid<T>,
+    grid: HashMap<GridNodePosition, T>,
+    command_queue: Vector<CommandItem<T>>,
     pub show_grid_axis: bool,
     pub action: GridAction,
     pub node_type: T,
@@ -228,12 +241,58 @@ pub struct GridWidgetData<T:GridRunner + PartialEq>{
 impl<T:GridRunner + PartialEq> GridWidgetData<T>{
     pub fn new(initial_node: T) -> Self {
         GridWidgetData {
-            grid: Grid::new(),
+            grid: HashMap::new(),
+            command_queue: Vector::new(),
             show_grid_axis: true,
             action: GridAction::Dynamic,
             node_type: initial_node,
         }
     }
+
+    fn add_node(&mut self, pos: &GridNodePosition, item: T){
+        let option = self.grid.get(pos);
+        if item.can_add(option){
+            self.grid.insert(*pos, item.clone());
+            let command_item = CommandItem::Add(*pos, item.clone());
+            self.command_queue.push_back(command_item);
+        } 
+    }
+
+    fn remove_node(&mut self, pos: &GridNodePosition) -> Option<T>{
+        let option = self.grid.remove(pos);
+        match option{
+            None => (),
+            Some(item) => {
+                if item.can_remove(){
+                    let command_item = CommandItem::Remove(*pos, item.clone());
+                    self.command_queue.push_back(command_item);
+                    return Some(item);
+                } else {
+                    self.grid.insert(*pos, item);
+                }
+            }
+        }
+        return None;
+    }
+
+    fn move_node(&mut self, from: &GridNodePosition, to:&GridNodePosition) -> bool {
+        let item = self.grid.get(from).unwrap();
+        let other = self.grid.get(to);
+        if item.can_move(other) {
+            let item = self.grid.remove(from).unwrap();
+            self.grid.insert(*to, item.clone());
+            let command_item = CommandItem::Move(*from, *to, item);
+            self.command_queue.push_back(command_item);
+            return true;
+        }
+        return false;
+    }
+
+    fn submit_command_queue(&mut self) {
+        self.command_queue.clear();
+    }
+
+    fn clear_all(&mut self) {}
 }
 
 
@@ -310,16 +369,16 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                         if cmd.is(SET_DISABLED) {
                             self.state = GridState::Disabled;
                         } else if cmd.is(RESET) {
-                            data.grid.clear_all();
-                        } else if cmd.is(CLEAR_TRACKER) {
-                            data.grid.clear_tracker();
+                            data.clear_all();
+                        } else if cmd.is(SUBMIT_COMMAND_QUEUE) {
+                            data.submit_command_queue();
                         }
                     },
         
                     Event::MouseDown(e) => {
                         let grid_pos_opt = self.grid_pos(e.pos);
                             grid_pos_opt.iter().for_each(|pos| {
-                                let option = data.grid.get_item(pos);
+                                let option = data.grid.get(pos);
                                 if self.state == GridState::Idle{
                                     if e.button == MouseButton::Left{
                                         println!("Left Click");
@@ -378,11 +437,11 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                                 match self.state{
                                     GridState::Running(_) => {
                                         if data.action == GridAction::Add {
-                                            data.grid.add_node(pos, &data.node_type);
+                                            data.add_node(pos, data.node_type.clone());
                                         } else if data.action == GridAction::Panning {
                                             self.current_pos = *pos;
                                         } else if data.action == GridAction::Remove && option != Option::None{
-                                            data.grid.remove_node(pos);
+                                            data.remove_node(pos);
                                         } else if data.action == GridAction::Move && option != Option::None {
                                             self.current_pos = *pos;
                                         }
@@ -403,19 +462,19 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                     Event::MouseMove(e) => {
                         let grid_pos_opt = self.grid_pos(e.pos);
                         grid_pos_opt.iter().for_each(|pos| {
-                            let option = data.grid.get_item(pos);
+                            let option = data.grid.get(pos);
                             match data.action{
                                 GridAction::Add => {
-                                    data.grid.add_node(pos, &data.node_type)
+                                    data.add_node(pos, data.node_type.clone())
                                 },
                                 GridAction::Move => {
                                     if self.current_pos != *pos {
-                                        if data.grid.move_node(&self.current_pos, pos) {self.current_pos = *pos;}
+                                        if data.move_node(&self.current_pos, pos) {self.current_pos = *pos;}
                                     }
                                 },
                                 GridAction::Remove => {
                                     if option != Option::None{
-                                        data.grid.remove_node(pos);
+                                        data.remove_node(pos);
                                     }        
                                 },
                                 GridAction::Panning => {
@@ -477,10 +536,17 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
             //debug!("Painting the whole window on grid axis change");
             ctx.request_paint();
         } else {
-            for cell in data.grid.get_changes().iter() {
-                ctx.request_paint_rect(self.invalidation_area(*cell));
+            for cell in data.command_queue.iter() {
+                match cell{
+                    CommandItem::Add(pos, node) => ctx.request_paint_rect(self.invalidation_area(*pos)),
+                    CommandItem::Remove(pos, node) => ctx.request_paint_rect(self.invalidation_area(*pos)),
+                    CommandItem::Move(from, to, node) => {
+                        ctx.request_paint_rect(self.invalidation_area(*from));
+                        ctx.request_paint_rect(self.invalidation_area(*to));
+                    }
+                }
             }
-            ctx.submit_command(CLEAR_TRACKER);
+            ctx.submit_command(SUBMIT_COMMAND_QUEUE);
         }
     }
 
@@ -591,10 +657,7 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
 
                     let grid_pos = GridNodePosition { row, col };
 
-                    match data
-                        .grid
-                        .get_item(&grid_pos)
-                    {
+                    match data.grid.get(&grid_pos){
                         None => (),
                         Some(runner) => ctx.fill(rect, runner.get_color())
                     }
