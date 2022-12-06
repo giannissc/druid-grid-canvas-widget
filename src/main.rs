@@ -2,17 +2,11 @@
 
 use druid::{theme, AppLauncher, Color, LocalizedString, WindowDesc, Data, Lens, Widget, WidgetExt, Size, WidgetId};
 
-use druid::widget::{Flex, Label, MainAxisAlignment, CrossAxisAlignment, Button, Switch, Slider};
-
-use druid::im::vector;
+use druid::widget::{Flex, Label, MainAxisAlignment, CrossAxisAlignment, Switch,};
 
 use druid_color_thesaurus::*;
 
-pub mod lib;
-
-use crate::lib::{Grid, GridWidgetData, GridWidget, GridRunner};
-
-
+use druid_grid_graph_widget::{Grid, GridWidgetData, GridWidget, GridRunner};
 
 //////////////////////////////////////////////////////////////////////////////////////
 // Constants
