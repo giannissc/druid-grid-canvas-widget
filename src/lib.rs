@@ -1,7 +1,8 @@
 use std::marker::PhantomData;
+use std::ops::Range;
 
 use druid::{BoxConstraints, Data, Env, Event, EventCtx, LayoutCtx, Lens, LifeCycle,
-    LifeCycleCtx, PaintCtx, RenderContext, UpdateCtx, Widget, Selector, Point, Rect, Size, Color, MouseButton};
+    LifeCycleCtx, PaintCtx, RenderContext, UpdateCtx, Widget, Selector, Point, Rect, Size, Color, MouseButton, Command, Target};
 
 use druid::im::{HashMap, Vector};
 
@@ -15,8 +16,7 @@ use druid_color_thesaurus::*;
 
 pub const SET_DISABLED: Selector = Selector::new("disabled-grid-state");
 pub const SET_ENABLED: Selector = Selector::new("idle-grid-state");
-pub const RESET: Selector = Selector::new("RESET");
-pub const SUBMIT_COMMAND_QUEUE: Selector = Selector::new("CLEAR");
+pub const UPDATE_PLAYBACK_INDEX: Selector<usize> = Selector::new("update-playback-index");
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -133,14 +133,16 @@ pub enum GridAction{
 
 //////////////////////////////////////////////////////////////////////////////////////
 //
-// CommandItem
+// StackItem
 //
 //////////////////////////////////////////////////////////////////////////////////////
 #[derive(Clone, PartialEq, Data, Debug)]
-pub enum CommandItem<T>{
+pub enum StackItem<T>{
     Add(GridNodePosition, T),
     Remove(GridNodePosition, T),
     Move(GridNodePosition, GridNodePosition, T),
+    BatchAdd(HashMap<GridNodePosition, T>),
+    BatchRemove(HashMap<GridNodePosition, T>),
 }
 
 //////////////////////////////////////////////////////////////////////////////////////
@@ -151,7 +153,9 @@ pub enum CommandItem<T>{
 #[derive(Clone, PartialEq, Data, Lens)]
 pub struct GridWidgetData<T:GridRunner + PartialEq>{
     grid: HashMap<GridNodePosition, T>,
-    command_queue: Vector<CommandItem<T>>,
+    save_stack: Vector<StackItem<T>>,
+    // restore_stack: Vector<StackItem<T>>,
+    playback_index: usize,
     pub show_grid_axis: bool,
     pub action: GridAction,
     pub node_type: T,
@@ -161,7 +165,9 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
     pub fn new(initial_node: T) -> Self {
         GridWidgetData {
             grid: HashMap::new(),
-            command_queue: Vector::new(),
+            save_stack: Vector::new(),
+            // restore_stack: Vector::new(),
+            playback_index: 0,
             show_grid_axis: true,
             action: GridAction::Dynamic,
             node_type: initial_node,
@@ -172,8 +178,8 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
         let option = self.grid.get(pos);
         if item.can_add(option){
             self.grid.insert(*pos, item.clone());
-            let command_item = CommandItem::Add(*pos, item.clone());
-            self.command_queue.push_back(command_item);
+            let command_item = StackItem::Add(*pos, item.clone());
+            self.save_stack.push_back(command_item);
         } 
     }
 
@@ -183,8 +189,8 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
             None => (),
             Some(item) => {
                 if item.can_remove(){
-                    let command_item = CommandItem::Remove(*pos, item.clone());
-                    self.command_queue.push_back(command_item);
+                    let command_item = StackItem::Remove(*pos, item.clone());
+                    self.save_stack.push_back(command_item);
                     return Some(item);
                 } else {
                     self.grid.insert(*pos, item);
@@ -200,18 +206,12 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
         if item.can_move(other) {
             let item = self.grid.remove(from).unwrap();
             self.grid.insert(*to, item.clone());
-            let command_item = CommandItem::Move(*from, *to, item);
-            self.command_queue.push_back(command_item);
+            let command_item = StackItem::Move(*from, *to, item);
+            self.save_stack.push_back(command_item);
             return true;
         }
         return false;
     }
-
-    fn submit_command_queue(&mut self) {
-        self.command_queue.clear();
-    }
-
-    fn clear_all(&mut self) {}
 }
 
 
@@ -287,10 +287,9 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                     Event::Command(cmd) => {
                         if cmd.is(SET_DISABLED) {
                             self.state = GridState::Disabled;
-                        } else if cmd.is(RESET) {
-                            data.clear_all();
-                        } else if cmd.is(SUBMIT_COMMAND_QUEUE) {
-                            data.submit_command_queue();
+                        } else if cmd.is(UPDATE_PLAYBACK_INDEX) {
+                            let payload = cmd.get(UPDATE_PLAYBACK_INDEX).unwrap();
+                            data.playback_index = *payload;
                         }
                     },
         
@@ -455,17 +454,23 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
             //debug!("Painting the whole window on grid axis change");
             ctx.request_paint();
         } else {
-            for cell in data.command_queue.iter() {
-                match cell{
-                    CommandItem::Add(pos, node) => ctx.request_paint_rect(self.invalidation_area(*pos)),
-                    CommandItem::Remove(pos, node) => ctx.request_paint_rect(self.invalidation_area(*pos)),
-                    CommandItem::Move(from, to, node) => {
+            let start_range = data.playback_index;
+            let end_range = data.save_stack.len();
+            let range = Range{start: start_range, end: end_range};
+            for index in range{
+                let item = data.save_stack.get(index).unwrap();
+                match item{
+                    StackItem::Add(pos, node) => ctx.request_paint_rect(self.invalidation_area(*pos)),
+                    StackItem::Remove(pos, node) => ctx.request_paint_rect(self.invalidation_area(*pos)),
+                    StackItem::Move(from, to, node) => {
                         ctx.request_paint_rect(self.invalidation_area(*from));
                         ctx.request_paint_rect(self.invalidation_area(*to));
-                    }
+                    },
+                    _ => (),
                 }
             }
-            ctx.submit_command(SUBMIT_COMMAND_QUEUE);
+            let command = Command::new(UPDATE_PLAYBACK_INDEX, end_range, Target::Auto);
+            ctx.submit_command(command);
         }
     }
 
