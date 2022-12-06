@@ -125,29 +125,29 @@ impl<T:GridRunner + PartialEq> Grid<T>{
         }
     }
 
-    pub fn get_item(&self, key: &GridNodePosition) -> Option<&T> {
+    fn get_item(&self, key: &GridNodePosition) -> Option<&T> {
         self.storage.get(key)
     }
 
-    pub fn get_changes(&self) -> HashSet<GridNodePosition> {
+    fn get_changes(&self) -> HashSet<GridNodePosition> {
         self.change_tracker.clone()
     }
 
-    pub fn iter(&self) -> Iter<GridNodePosition, T>{
+    fn iter(&self) -> Iter<GridNodePosition, T>{
         self.storage.iter()
     }
 
-    pub fn clear_tracker(&mut self) {
+    fn clear_tracker(&mut self) {
         self.change_tracker.clear();
     }
 
-    pub fn clear_all(&mut self) {}
+    fn clear_all(&mut self) {}
 
-    pub fn clear_except(&mut self) {}
+    fn clear_except(&mut self) {}
 
-    pub fn clear_only(&mut self){}
+    fn clear_only(&mut self){}
 
-    pub fn add_node(&mut self, pos: &GridNodePosition, item: &T){
+    fn add_node(&mut self, pos: &GridNodePosition, item: &T){
         if item.can_add(self.storage.get(pos)){
             
             self.storage.insert(*pos, item.clone());
@@ -155,7 +155,7 @@ impl<T:GridRunner + PartialEq> Grid<T>{
         } 
     }
 
-    pub fn remove_node(&mut self, pos: &GridNodePosition) -> Option<T>{
+    fn remove_node(&mut self, pos: &GridNodePosition) -> Option<T>{
         let option = self.storage.get(pos);
         match option{
             None => (),
@@ -170,7 +170,7 @@ impl<T:GridRunner + PartialEq> Grid<T>{
         return None;
     }
 
-    pub fn move_node(&mut self, from: &GridNodePosition, to:&GridNodePosition) -> bool {
+    fn move_node(&mut self, from: &GridNodePosition, to:&GridNodePosition) -> bool {
         let item = self.storage.get(from).unwrap();
         let other = self.storage.get(to);
         if item.can_move(other) {
@@ -310,7 +310,7 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                         if cmd.is(SET_DISABLED) {
                             self.state = GridState::Disabled;
                         } else if cmd.is(RESET) {
-                            data.grid.clear_only();
+                            data.grid.clear_all();
                         } else if cmd.is(CLEAR_TRACKER) {
                             data.grid.clear_tracker();
                         }
