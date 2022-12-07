@@ -18,8 +18,8 @@ use log::info;
 pub const SET_DISABLED: Selector = Selector::new("disabled-grid-state");
 pub const SET_ENABLED: Selector = Selector::new("idle-grid-state");
 // pub const SET_PLAYBACK_INDEX: Selector<usize> = Selector::new("update-playback-index");
-// pub const ADD_PLAYBACK_INDEX:Selector = Selector::new("add-playback-inddex");
-// pub const SUBTRACT_PLAYBACKINDEX:Selector = Selector::new("subtract-playback-inddex");
+pub const ADD_PLAYBACK_INDEX:Selector = Selector::new("add-playback-inddex");
+pub const SUBTRACT_PLAYBACKINDEX:Selector = Selector::new("subtract-playback-inddex");
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 /// 
@@ -98,7 +98,7 @@ impl GridNodePosition {
 // GridRunner
 //
 //////////////////////////////////////////////////////////////////////////////////////
-pub trait GridRunner: Clone + Hash + Eq{
+pub trait GridRunner: Copy + Clone + Hash + Eq{
     fn can_add(&self, other: Option<&Self>) -> bool;
     fn can_remove(&self) -> bool;
     fn can_move(&self, other: Option<&Self>) -> bool;
@@ -111,7 +111,7 @@ pub trait GridRunner: Clone + Hash + Eq{
 //
 //////////////////////////////////////////////////////////////////////////////////////
 /// 
-#[derive(Clone, PartialEq, Data, Debug)]
+#[derive(Clone, Copy, PartialEq, Data, Debug)]
 pub enum GridState{
     Idle,
     Running(GridAction),
@@ -124,7 +124,7 @@ pub enum GridState{
 //
 //////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Clone, PartialEq, Data, Debug)]
+#[derive(Clone, Copy, PartialEq, Data, Debug)]
 pub enum GridAction{
     Dynamic,
     Add,
@@ -206,8 +206,8 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
     fn add_node(&mut self, pos: &GridNodePosition, item: T) -> Option<StackItem<T>>{
         let option = self.grid.get(pos);
         if item.can_add(option){
-            self.grid.insert(*pos, item.clone());
-            let command_item = StackItem::Add(*pos, item.clone());
+            self.grid.insert(*pos, item);
+            let command_item = StackItem::Add(*pos, item);
             self.save_stack.push_back(command_item.clone());
             return Some(command_item);
         }
@@ -221,7 +221,7 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
             None => (),
             Some(item) => {
                 if item.can_remove(){
-                    let command_item = StackItem::Remove(*pos, item.clone());
+                    let command_item = StackItem::Remove(*pos, item);
                     self.save_stack.push_back(command_item.clone());
                     return Some(command_item);
                 } else {
@@ -237,13 +237,18 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
         let other = self.grid.get(to);
         if item.can_move(other) {
             let item = self.grid.remove(from).unwrap();
-            self.grid.insert(*to, item.clone());
+            self.grid.insert(*to, item);
             let command_item = StackItem::Move(*from, *to, item);
             self.save_stack.push_back(command_item.clone());
             return Some(command_item);
         }
         None
     }
+
+    pub fn submit_to_stack(&mut self, other: Vector<StackItem<T>>) {
+        self.save_stack.append(other)
+    }
+
 }
 
 
@@ -356,7 +361,7 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                                                 }
                                             },
                                             _ => {
-                                                self.state = GridState::Running(data.action.clone());
+                                                self.state = GridState::Running(data.action);
                                             },                                        
                                         }
 
@@ -364,7 +369,7 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                                         info!("Right Click");
                                         match data.action{
                                             GridAction::Dynamic => {
-                                                self.state = GridState::Running(data.action.clone());
+                                                self.state = GridState::Running(data.action);
                                                 data.action = GridAction::Remove;
         
                                             },
@@ -375,7 +380,7 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                                         info!("Middle Click");
                                         match data.action{
                                             GridAction::Dynamic => {
-                                                self.state = GridState::Running(data.action.clone());
+                                                self.state = GridState::Running(data.action);
                                                 data.action = GridAction::Panning;
                                             },
                                             _ => (),
@@ -387,7 +392,7 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                                 match self.state{
                                     GridState::Running(_) => {
                                         if data.action == GridAction::Add {
-                                             match data.add_node(pos, data.node_type.clone()){
+                                             match data.add_node(pos, data.node_type){
                                                 Some(item) => {change_tracker.insert(item);},
                                                 None => (),
                                              }
@@ -421,7 +426,7 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                             let option = data.grid.get(pos);
                             match data.action{
                                 GridAction::Add => {
-                                    match data.add_node(pos, data.node_type.clone()){
+                                    match data.add_node(pos, data.node_type){
                                         Some(item) => {change_tracker.insert(item);},
                                         None => (),
                                      }
