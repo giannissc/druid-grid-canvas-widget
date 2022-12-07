@@ -183,7 +183,6 @@ pub struct GridWidgetData<T:GridRunner + PartialEq>{
     grid: HashMap<GridNodePosition, T>,
     save_stack: Vector<StackItem<T>>,
     // restore_stack: Vector<StackItem<T>>,
-    pub playback_index: usize,
     pub show_grid_axis: bool,
     pub action: GridAction,
     pub node_type: T,
@@ -195,7 +194,6 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
             grid: HashMap::new(),
             save_stack: Vector::new(),
             // restore_stack: Vector::new(),
-            playback_index: 0,
             show_grid_axis: true,
             action: GridAction::Dynamic,
             node_type: initial_node,
@@ -269,6 +267,7 @@ pub struct GridWidget<T> {
     phantom: PhantomData<T>,
     start_pos: GridNodePosition,
     state: GridState,
+    playback_index: usize,
 }
 
 impl<T> GridWidget<T> {
@@ -287,6 +286,7 @@ impl<T> GridWidget<T> {
             phantom: PhantomData,
             start_pos: GridNodePosition { row: 0, col: 0 },
             state: GridState::Idle,
+            playback_index: 0,
         }
     }
 
@@ -474,12 +474,12 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
 
 
         if change_tracker.len() != 0 {
-            info!("Index Before: {:?}", data.playback_index);
+            info!("Index Before: {:?}", self.playback_index);
             info!("Tracker Size: {:?}", change_tracker.len());
 
-            data.playback_index += change_tracker.len();
+            self.playback_index += change_tracker.len();
 
-            info!("Index After: {:?}\n", data.playback_index);
+            info!("Index After: {:?}\n", self.playback_index);
 
             for item in &change_tracker {
                 for pos in item.get_positions().iter(){
