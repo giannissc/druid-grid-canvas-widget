@@ -236,17 +236,13 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
     }
 
     fn remove_node(&mut self, pos: &GridNodePosition) -> bool{
-        let option = self.grid.remove(pos);
-        match option{
-            None => (),
-            Some(item) => {
-                if item.can_remove(){
-                    let command_item = StackItem::Remove(*pos, item);
-                    self.save_stack.push_back(command_item);
-                    return true;
-                } else {
-                    self.grid.insert(*pos, item);
-                }
+        if let Some(item) = self.grid.remove(pos){
+            if item.can_remove(){
+                let command_item = StackItem::Remove(*pos, item);
+                self.save_stack.push_back(command_item);
+                return true;
+            } else {
+                self.grid.insert(*pos, item);
             }
         }
         false
@@ -391,7 +387,7 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                                                 }
                                             },
                                             GridAction::Move => {
-                                                if option != Option::None {
+                                                if option.is_some() {
                                                     self.state = GridState::Running(GridAction::Move);
                                                 }
                                             },
@@ -402,47 +398,35 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
 
                                     } else if e.button == MouseButton::Right{
                                         info!("Right Click");
-                                        match data.action{
-                                            GridAction::Dynamic => {
-                                                self.state = GridState::Running(data.action);
-                                                data.action = GridAction::Remove;
-        
-                                            },
-                                            _ => (),
+                                        if let GridAction::Dynamic = data.action{
+                                            self.state = GridState::Running(data.action);
+                                            data.action = GridAction::Remove;
                                         }
-
                                     } else if e.button == MouseButton::Middle{
                                         info!("Middle Click");
-                                        match data.action{
-                                            GridAction::Dynamic => {
-                                                self.state = GridState::Running(data.action);
+                                        if let GridAction::Dynamic = data.action{
+                                            self.state = GridState::Running(data.action);
                                                 data.action = GridAction::Panning;
-                                            },
-                                            _ => (),
                                         }
-
                                     }
                                 }
 
-                                match self.state{
-                                    GridState::Running(_) => {
-                                        if data.action == GridAction::Add {
-                                            if data.add_node(pos, data.node_type) {
-                                                change_tracker.insert(data.save_stack.last().unwrap().clone());
-                                                self.playback_index += 1;
-                                            }
-                                        } else if data.action == GridAction::Panning {
-                                            self.start_pos = *pos;
-                                        } else if data.action == GridAction::Remove && option != Option::None{
-                                            if data.remove_node(pos) {
-                                                change_tracker.insert(data.save_stack.last().unwrap().clone());
-                                                self.playback_index += 1;
-                                            }
-                                        } else if data.action == GridAction::Move && option != Option::None {
-                                            self.start_pos = *pos;
+                                if let GridState::Running(_) = self.state{
+                                    if data.action == GridAction::Add {
+                                        if data.add_node(pos, data.node_type) {
+                                            change_tracker.insert(data.save_stack.last().unwrap().clone());
+                                            self.playback_index += 1;
                                         }
-                                    },
-                                    _ => (),
+                                    } else if data.action == GridAction::Panning {
+                                        self.start_pos = *pos;
+                                    } else if data.action == GridAction::Remove && option.is_some(){
+                                        if data.remove_node(pos) {
+                                            change_tracker.insert(data.save_stack.last().unwrap().clone());
+                                            self.playback_index += 1;
+                                        }
+                                    } else if data.action == GridAction::Move && option.is_some() {
+                                        self.start_pos = *pos;
+                                    }
                                 }
                             });
                         info!("Acquire State: {:?}", self.state);
@@ -476,7 +460,7 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                                     }
                                 },
                                 GridAction::Remove => {
-                                    if option != Option::None{
+                                    if option.is_some(){
                                         if data.remove_node(pos) {
                                             change_tracker.insert(data.save_stack.last().unwrap().clone());
                                             self.playback_index += 1;
@@ -511,13 +495,10 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                 }
             },
             GridState::Disabled => {
-                match event {      
-                    Event::Command(cmd) => {
-                        if cmd.is(SET_ENABLED) {
-                            self.state = GridState::Idle;
-                        }
-                    },      
-                    _ => {},
+                if let Event::Command(cmd) = event {
+                    if cmd.is(SET_ENABLED) {
+                        self.state = GridState::Idle;
+                    }
                 }
             },
         }
@@ -671,9 +652,8 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
 
                     let grid_pos = GridNodePosition { row, col };
 
-                    match data.grid.get(&grid_pos){
-                        None => (),
-                        Some(runner) => ctx.fill(rect, runner.get_color())
+                    if let Some(runner) = data.grid.get(&grid_pos){
+                        ctx.fill(rect, runner.get_color());
                     }
                 }
             }
