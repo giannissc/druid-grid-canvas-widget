@@ -1,10 +1,11 @@
+use std::hash::Hash;
 use std::marker::PhantomData;
-use std::ops::Range;
+use std::ops::{Add, Deref};
 
 use druid::{BoxConstraints, Data, Env, Event, EventCtx, LayoutCtx, Lens, LifeCycle,
-    LifeCycleCtx, PaintCtx, RenderContext, UpdateCtx, Widget, Selector, Point, Rect, Size, Color, MouseButton, Command, Target};
+    LifeCycleCtx, PaintCtx, RenderContext, UpdateCtx, Widget, Selector, Point, Rect, Size, Color, MouseButton};
 
-use druid::im::{HashMap, Vector};
+use druid::im::{HashMap, Vector, HashSet};
 
 use druid_color_thesaurus::*;
 
@@ -13,11 +14,11 @@ use druid_color_thesaurus::*;
 /// Command Selectors
 /// 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
-
 pub const SET_DISABLED: Selector = Selector::new("disabled-grid-state");
 pub const SET_ENABLED: Selector = Selector::new("idle-grid-state");
-pub const UPDATE_PLAYBACK_INDEX: Selector<usize> = Selector::new("update-playback-index");
-
+// pub const SET_PLAYBACK_INDEX: Selector<usize> = Selector::new("update-playback-index");
+// pub const ADD_PLAYBACK_INDEX:Selector = Selector::new("add-playback-inddex");
+// pub const SUBTRACT_PLAYBACKINDEX:Selector = Selector::new("subtract-playback-inddex");
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 /// 
@@ -96,7 +97,7 @@ impl GridNodePosition {
 // GridRunner
 //
 //////////////////////////////////////////////////////////////////////////////////////
-pub trait GridRunner: Clone{
+pub trait GridRunner: Clone + Hash + Eq{
     fn can_add(&self, other: Option<&Self>) -> bool;
     fn can_remove(&self) -> bool;
     fn can_move(&self, other: Option<&Self>) -> bool;
@@ -136,13 +137,40 @@ pub enum GridAction{
 // StackItem
 //
 //////////////////////////////////////////////////////////////////////////////////////
-#[derive(Clone, PartialEq, Data, Debug)]
-pub enum StackItem<T>{
+#[derive(Clone, PartialEq, Data, Debug, Hash, Eq)]
+pub enum StackItem<T: GridRunner>{
     Add(GridNodePosition, T),
     Remove(GridNodePosition, T),
     Move(GridNodePosition, GridNodePosition, T),
     BatchAdd(HashMap<GridNodePosition, T>),
     BatchRemove(HashMap<GridNodePosition, T>),
+}
+
+impl<T: GridRunner> StackItem<T>{
+    fn get_positions(&self) -> HashSet<GridNodePosition>{
+        let mut set: HashSet<GridNodePosition> = HashSet::new();
+        
+        match self{
+            StackItem::Add(pos, _) => {set.insert(*pos);},
+            StackItem::Remove(pos, _) => {set.insert(*pos);},
+            StackItem::BatchAdd(item) => {
+                for pos in item.keys(){
+                    set.insert(*pos);
+                }
+            },
+            StackItem::BatchRemove(item) => {
+                for pos in item.keys(){
+                    set.insert(*pos);
+                }
+            },
+            StackItem::Move(from, to , item) => {
+                set.insert(*from);
+                set.insert(*to);
+            }
+        }
+
+        set
+    }
 }
 
 //////////////////////////////////////////////////////////////////////////////////////
@@ -174,43 +202,46 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
         }
     }
 
-    fn add_node(&mut self, pos: &GridNodePosition, item: T){
+    fn add_node(&mut self, pos: &GridNodePosition, item: T) -> Option<StackItem<T>>{
         let option = self.grid.get(pos);
         if item.can_add(option){
             self.grid.insert(*pos, item.clone());
             let command_item = StackItem::Add(*pos, item.clone());
-            self.save_stack.push_back(command_item);
-        } 
+            self.save_stack.push_back(command_item.clone());
+            return Some(command_item);
+        }
+
+        None
     }
 
-    fn remove_node(&mut self, pos: &GridNodePosition) -> Option<T>{
+    fn remove_node(&mut self, pos: &GridNodePosition) -> Option<StackItem<T>>{
         let option = self.grid.remove(pos);
         match option{
             None => (),
             Some(item) => {
                 if item.can_remove(){
                     let command_item = StackItem::Remove(*pos, item.clone());
-                    self.save_stack.push_back(command_item);
-                    return Some(item);
+                    self.save_stack.push_back(command_item.clone());
+                    return Some(command_item);
                 } else {
                     self.grid.insert(*pos, item);
                 }
             }
         }
-        return None;
+        None
     }
 
-    fn move_node(&mut self, from: &GridNodePosition, to:&GridNodePosition) -> bool {
+    fn move_node(&mut self, from: &GridNodePosition, to:&GridNodePosition) -> Option<StackItem<T>>{
         let item = self.grid.get(from).unwrap();
         let other = self.grid.get(to);
         if item.can_move(other) {
             let item = self.grid.remove(from).unwrap();
             self.grid.insert(*to, item.clone());
             let command_item = StackItem::Move(*from, *to, item);
-            self.save_stack.push_back(command_item);
-            return true;
+            self.save_stack.push_back(command_item.clone());
+            return Some(command_item);
         }
-        return false;
+        None
     }
 }
 
@@ -232,7 +263,7 @@ pub struct GridWidget<T> {
     chosen_cell_size: Size,
     left_corner_point: GridNodePosition,
     phantom: PhantomData<T>,
-    current_pos: GridNodePosition,
+    start_pos: GridNodePosition,
     state: GridState,
 }
 
@@ -250,7 +281,7 @@ impl<T> GridWidget<T> {
             },
             left_corner_point: GridNodePosition { row: 0, col: 0 },
             phantom: PhantomData,
-            current_pos: GridNodePosition { row: 0, col: 0 },
+            start_pos: GridNodePosition { row: 0, col: 0 },
             state: GridState::Idle,
         }
     }
@@ -279,17 +310,17 @@ impl<T> GridWidget<T> {
 }
 
 impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
-    fn event(&mut self, _ctx: &mut EventCtx, event: &Event, data: &mut GridWidgetData<T>, _env: &Env) {
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut GridWidgetData<T>, _env: &Env) {
+        
+        let mut change_tracker: HashSet<StackItem<T>> = HashSet::new();
+        
         match &self.state{
             GridState::Idle => {
-                //println!("Idle State");
+                // println!("Idle State");
                 match event {
                     Event::Command(cmd) => {
                         if cmd.is(SET_DISABLED) {
                             self.state = GridState::Disabled;
-                        } else if cmd.is(UPDATE_PLAYBACK_INDEX) {
-                            let payload = cmd.get(UPDATE_PLAYBACK_INDEX).unwrap();
-                            data.playback_index = *payload;
                         }
                     },
         
@@ -355,13 +386,19 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                                 match self.state{
                                     GridState::Running(_) => {
                                         if data.action == GridAction::Add {
-                                            data.add_node(pos, data.node_type.clone());
+                                             match data.add_node(pos, data.node_type.clone()){
+                                                Some(item) => {change_tracker.insert(item);},
+                                                None => (),
+                                             }
                                         } else if data.action == GridAction::Panning {
-                                            self.current_pos = *pos;
+                                            self.start_pos = *pos;
                                         } else if data.action == GridAction::Remove && option != Option::None{
-                                            data.remove_node(pos);
+                                            match data.remove_node(pos) {
+                                                Some(item) => {change_tracker.insert(item);},
+                                                None => (),
+                                             }
                                         } else if data.action == GridAction::Move && option != Option::None {
-                                            self.current_pos = *pos;
+                                            self.start_pos = *pos;
                                         }
                                     },
                                     _ => (),
@@ -375,7 +412,7 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                 }
             },
             GridState::Running(_) => {
-                //println!("Running State");
+                // println!("Running State");
                 match event {            
                     Event::MouseMove(e) => {
                         let grid_pos_opt = self.grid_pos(e.pos);
@@ -383,16 +420,29 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                             let option = data.grid.get(pos);
                             match data.action{
                                 GridAction::Add => {
-                                    data.add_node(pos, data.node_type.clone())
+                                    match data.add_node(pos, data.node_type.clone()){
+                                        Some(item) => {change_tracker.insert(item);},
+                                        None => (),
+                                     }
+                                    
                                 },
                                 GridAction::Move => {
-                                    if self.current_pos != *pos {
-                                        if data.move_node(&self.current_pos, pos) {self.current_pos = *pos;}
+                                    if self.start_pos != *pos {
+                                        match data.move_node(&self.start_pos, pos) {
+                                            Some(item) => {
+                                                self.start_pos = *pos;
+                                                change_tracker.insert(item);
+                                            },
+                                            None => (),
+                                        };
                                     }
                                 },
                                 GridAction::Remove => {
                                     if option != Option::None{
-                                        data.remove_node(pos);
+                                        match data.remove_node(pos){
+                                            Some(item) => {change_tracker.insert(item);},
+                                            None => (),
+                                        }
                                     }        
                                 },
                                 GridAction::Panning => {
@@ -434,6 +484,26 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
             },
         }
 
+
+        if change_tracker.len() != 0 {
+            println!("Index Before: {:?}", data.playback_index);
+            println!("Tracker Size: {:?}", change_tracker.len());
+
+            data.playback_index += change_tracker.len();
+
+            println!("Index After: {:?}\n", data.playback_index);
+
+            for item in &change_tracker {
+                for pos in item.get_positions().iter(){
+                    ctx.request_paint_rect(self.invalidation_area(*pos));
+                }
+            }
+
+            change_tracker.clear();
+        }
+        
+        
+
         
     }
 
@@ -449,28 +519,10 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
     ) {
         //debug!("Running grid widget update method");
         //debug!("Difference: {:?}", data.grid.get_storage().difference(old_data.grid.get_storage()));
-
+        
         if data.show_grid_axis != old_data.show_grid_axis {
             //debug!("Painting the whole window on grid axis change");
             ctx.request_paint();
-        } else {
-            let start_range = data.playback_index;
-            let end_range = data.save_stack.len();
-            let range = Range{start: start_range, end: end_range};
-            for index in range{
-                let item = data.save_stack.get(index).unwrap();
-                match item{
-                    StackItem::Add(pos, node) => ctx.request_paint_rect(self.invalidation_area(*pos)),
-                    StackItem::Remove(pos, node) => ctx.request_paint_rect(self.invalidation_area(*pos)),
-                    StackItem::Move(from, to, node) => {
-                        ctx.request_paint_rect(self.invalidation_area(*from));
-                        ctx.request_paint_rect(self.invalidation_area(*to));
-                    },
-                    _ => (),
-                }
-            }
-            let command = Command::new(UPDATE_PLAYBACK_INDEX, end_range, Target::Auto);
-            ctx.submit_command(command);
         }
     }
 

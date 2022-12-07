@@ -25,8 +25,6 @@ pub const GRID_ID: WidgetId = WidgetId::reserved(1);
 pub type Net = i32;
 //type Weight = i32;
 #[derive(Data, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Hash)]
-
-
 pub enum GridNodeType<Net> {
     Wall(Net),
     //WeightedNode(Weight),
