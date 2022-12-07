@@ -1,6 +1,5 @@
 use std::hash::Hash;
 use std::marker::PhantomData;
-use std::ops::{Add, Deref};
 
 use druid::{BoxConstraints, Data, Env, Event, EventCtx, LayoutCtx, Lens, LifeCycle,
     LifeCycleCtx, PaintCtx, RenderContext, UpdateCtx, Widget, Selector, Point, Rect, Size, Color, MouseButton};
@@ -164,7 +163,7 @@ impl<T: GridRunner> StackItem<T>{
                     set.insert(*pos);
                 }
             },
-            StackItem::Move(from, to , item) => {
+            StackItem::Move(from, to , _) => {
                 set.insert(*from);
                 set.insert(*to);
             }
@@ -203,46 +202,45 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
         }
     }
 
-    fn add_node(&mut self, pos: &GridNodePosition, item: T) -> Option<StackItem<T>>{
+    fn add_node(&mut self, pos: &GridNodePosition, item: T) -> bool{
         let option = self.grid.get(pos);
         if item.can_add(option){
             self.grid.insert(*pos, item);
             let command_item = StackItem::Add(*pos, item);
-            self.save_stack.push_back(command_item.clone());
-            return Some(command_item);
+            self.save_stack.push_back(command_item);
+            return true;
         }
-
-        None
+        false
     }
 
-    fn remove_node(&mut self, pos: &GridNodePosition) -> Option<StackItem<T>>{
+    fn remove_node(&mut self, pos: &GridNodePosition) -> bool{
         let option = self.grid.remove(pos);
         match option{
             None => (),
             Some(item) => {
                 if item.can_remove(){
                     let command_item = StackItem::Remove(*pos, item);
-                    self.save_stack.push_back(command_item.clone());
-                    return Some(command_item);
+                    self.save_stack.push_back(command_item);
+                    return true;
                 } else {
                     self.grid.insert(*pos, item);
                 }
             }
         }
-        None
+        false
     }
 
-    fn move_node(&mut self, from: &GridNodePosition, to:&GridNodePosition) -> Option<StackItem<T>>{
+    fn move_node(&mut self, from: &GridNodePosition, to:&GridNodePosition) -> bool{
         let item = self.grid.get(from).unwrap();
         let other = self.grid.get(to);
         if item.can_move(other) {
             let item = self.grid.remove(from).unwrap();
             self.grid.insert(*to, item);
             let command_item = StackItem::Move(*from, *to, item);
-            self.save_stack.push_back(command_item.clone());
-            return Some(command_item);
+            self.save_stack.push_back(command_item);
+            return true;
         }
-        None
+        false
     }
 
     pub fn submit_to_stack(&mut self, other: Vector<StackItem<T>>) {
@@ -392,17 +390,11 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                                 match self.state{
                                     GridState::Running(_) => {
                                         if data.action == GridAction::Add {
-                                             match data.add_node(pos, data.node_type){
-                                                Some(item) => {change_tracker.insert(item);},
-                                                None => (),
-                                             }
+                                            if data.add_node(pos, data.node_type) {change_tracker.insert(data.save_stack.last().unwrap().clone());}
                                         } else if data.action == GridAction::Panning {
                                             self.start_pos = *pos;
                                         } else if data.action == GridAction::Remove && option != Option::None{
-                                            match data.remove_node(pos) {
-                                                Some(item) => {change_tracker.insert(item);},
-                                                None => (),
-                                             }
+                                            if data.remove_node(pos) {change_tracker.insert(data.save_stack.last().unwrap().clone());}
                                         } else if data.action == GridAction::Move && option != Option::None {
                                             self.start_pos = *pos;
                                         }
@@ -426,29 +418,19 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                             let option = data.grid.get(pos);
                             match data.action{
                                 GridAction::Add => {
-                                    match data.add_node(pos, data.node_type){
-                                        Some(item) => {change_tracker.insert(item);},
-                                        None => (),
-                                     }
-                                    
+                                    if data.add_node(pos, data.node_type) {change_tracker.insert(data.save_stack.last().unwrap().clone());}                                    
                                 },
                                 GridAction::Move => {
                                     if self.start_pos != *pos {
-                                        match data.move_node(&self.start_pos, pos) {
-                                            Some(item) => {
-                                                self.start_pos = *pos;
-                                                change_tracker.insert(item);
-                                            },
-                                            None => (),
-                                        };
+                                        if data.move_node(&self.start_pos, pos) {
+                                            change_tracker.insert(data.save_stack.last().unwrap().clone());
+                                            self.start_pos = *pos;
+                                        }
                                     }
                                 },
                                 GridAction::Remove => {
                                     if option != Option::None{
-                                        match data.remove_node(pos){
-                                            Some(item) => {change_tracker.insert(item);},
-                                            None => (),
-                                        }
+                                        if data.remove_node(pos) {change_tracker.insert(data.save_stack.last().unwrap().clone());}
                                     }        
                                 },
                                 GridAction::Panning => {
