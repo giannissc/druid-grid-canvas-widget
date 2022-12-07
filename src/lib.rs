@@ -353,12 +353,14 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                             if let Some(item) = data.save_stack.get(self.playback_index){
                                 item.forward(&mut data.grid);
                                 change_tracker.insert(item.clone());
+                                self.playback_index += 1;
 
                             }
                         } else if cmd.is(SUBTRACT_PLAYBACK_INDEX){
                             if let Some(item) = data.save_stack.get(self.playback_index-1){
                                 item.reverse(&mut data.grid);
                                 change_tracker.insert(item.clone());
+                                self.playback_index -= 1;
                             }
                         }
                     },
@@ -425,11 +427,17 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                                 match self.state{
                                     GridState::Running(_) => {
                                         if data.action == GridAction::Add {
-                                            if data.add_node(pos, data.node_type) {change_tracker.insert(data.save_stack.last().unwrap().clone());}
+                                            if data.add_node(pos, data.node_type) {
+                                                change_tracker.insert(data.save_stack.last().unwrap().clone());
+                                                self.playback_index += 1;
+                                            }
                                         } else if data.action == GridAction::Panning {
                                             self.start_pos = *pos;
                                         } else if data.action == GridAction::Remove && option != Option::None{
-                                            if data.remove_node(pos) {change_tracker.insert(data.save_stack.last().unwrap().clone());}
+                                            if data.remove_node(pos) {
+                                                change_tracker.insert(data.save_stack.last().unwrap().clone());
+                                                self.playback_index += 1;
+                                            }
                                         } else if data.action == GridAction::Move && option != Option::None {
                                             self.start_pos = *pos;
                                         }
@@ -453,19 +461,26 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                             let option = data.grid.get(pos);
                             match data.action{
                                 GridAction::Add => {
-                                    if data.add_node(pos, data.node_type) {change_tracker.insert(data.save_stack.last().unwrap().clone());}                                    
+                                    if data.add_node(pos, data.node_type) {
+                                        change_tracker.insert(data.save_stack.last().unwrap().clone());
+                                        self.playback_index += 1;
+                                    }                                    
                                 },
                                 GridAction::Move => {
                                     if self.start_pos != *pos {
                                         if data.move_node(&self.start_pos, pos) {
                                             change_tracker.insert(data.save_stack.last().unwrap().clone());
+                                            self.playback_index += 1;
                                             self.start_pos = *pos;
                                         }
                                     }
                                 },
                                 GridAction::Remove => {
                                     if option != Option::None{
-                                        if data.remove_node(pos) {change_tracker.insert(data.save_stack.last().unwrap().clone());}
+                                        if data.remove_node(pos) {
+                                            change_tracker.insert(data.save_stack.last().unwrap().clone());
+                                            self.playback_index += 1;
+                                        }
                                     }        
                                 },
                                 GridAction::Panning => {
@@ -512,7 +527,7 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
             info!("Index Before: {:?}", self.playback_index);
             info!("Tracker Size: {:?}", change_tracker.len());
 
-            self.playback_index += change_tracker.len();
+            // self.playback_index += change_tracker.len();
 
             info!("Index After: {:?}\n", self.playback_index);
 
