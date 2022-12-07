@@ -8,6 +8,7 @@ use druid::{BoxConstraints, Data, Env, Event, EventCtx, LayoutCtx, Lens, LifeCyc
 use druid::im::{HashMap, Vector, HashSet};
 
 use druid_color_thesaurus::*;
+use log::info;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 /// 
@@ -183,7 +184,7 @@ pub struct GridWidgetData<T:GridRunner + PartialEq>{
     grid: HashMap<GridNodePosition, T>,
     save_stack: Vector<StackItem<T>>,
     // restore_stack: Vector<StackItem<T>>,
-    playback_index: usize,
+    pub playback_index: usize,
     pub show_grid_axis: bool,
     pub action: GridAction,
     pub node_type: T,
@@ -316,7 +317,7 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
         
         match &self.state{
             GridState::Idle => {
-                // println!("Idle State");
+                // info!("Idle State");
                 match event {
                     Event::Command(cmd) => {
                         if cmd.is(SET_DISABLED) {
@@ -330,9 +331,9 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                                 let option = data.grid.get(pos);
                                 if self.state == GridState::Idle{
                                     if e.button == MouseButton::Left{
-                                        println!("Left Click");
-                                        println!("Start State: {:?}", self.state);
-                                        println!("Start Action: {:?}", data.action);
+                                        info!("Left Click");
+                                        info!("Start State: {:?}", self.state);
+                                        info!("Start Action: {:?}", data.action);
                                         match data.action {
                                             GridAction::Dynamic => {
                                                 self.state = GridState::Running(GridAction::Dynamic);
@@ -360,7 +361,7 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                                         }
 
                                     } else if e.button == MouseButton::Right{
-                                        println!("Right Click");
+                                        info!("Right Click");
                                         match data.action{
                                             GridAction::Dynamic => {
                                                 self.state = GridState::Running(data.action.clone());
@@ -371,7 +372,7 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                                         }
 
                                     } else if e.button == MouseButton::Middle{
-                                        println!("Middle Click");
+                                        info!("Middle Click");
                                         match data.action{
                                             GridAction::Dynamic => {
                                                 self.state = GridState::Running(data.action.clone());
@@ -404,15 +405,15 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                                     _ => (),
                                 }
                             });
-                        println!("Acquire State: {:?}", self.state);
-                        println!("Acquire Action: {:?}", data.action);
+                        info!("Acquire State: {:?}", self.state);
+                        info!("Acquire Action: {:?}", data.action);
                     },
 
                     _ => {},
                 }
             },
             GridState::Running(_) => {
-                // println!("Running State");
+                // info!("Running State");
                 match event {            
                     Event::MouseMove(e) => {
                         let grid_pos_opt = self.grid_pos(e.pos);
@@ -466,8 +467,8 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                         } else if e.button == MouseButton::Left {
                             self.state = GridState::Idle;
                         }
-                        println!("Release State: {:?}", self.state);
-                        println!("Release Action: {:?}", data.action);
+                        info!("Release State: {:?}", self.state);
+                        info!("Release Action: {:?}", data.action);
                     },
                     _ => {},
                 }
@@ -486,12 +487,12 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
 
 
         if change_tracker.len() != 0 {
-            println!("Index Before: {:?}", data.playback_index);
-            println!("Tracker Size: {:?}", change_tracker.len());
+            info!("Index Before: {:?}", data.playback_index);
+            info!("Tracker Size: {:?}", change_tracker.len());
 
             data.playback_index += change_tracker.len();
 
-            println!("Index After: {:?}\n", data.playback_index);
+            info!("Index After: {:?}\n", data.playback_index);
 
             for item in &change_tracker {
                 for pos in item.get_positions().iter(){
