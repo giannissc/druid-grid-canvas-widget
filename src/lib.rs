@@ -18,7 +18,7 @@ pub const SET_DISABLED: Selector = Selector::new("disabled-grid-state");
 pub const SET_ENABLED: Selector = Selector::new("idle-grid-state");
 // pub const SET_PLAYBACK_INDEX: Selector<usize> = Selector::new("update-playback-index");
 pub const ADD_PLAYBACK_INDEX:Selector = Selector::new("add-playback-inddex");
-pub const SUBTRACT_PLAYBACKINDEX:Selector = Selector::new("subtract-playback-inddex");
+pub const SUBTRACT_PLAYBACK_INDEX:Selector = Selector::new("subtract-playback-inddex");
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 /// 
@@ -153,6 +153,10 @@ impl<T: GridRunner> StackItem<T>{
         match self{
             StackItem::Add(pos, _) => {set.insert(*pos);},
             StackItem::Remove(pos, _) => {set.insert(*pos);},
+            StackItem::Move(from, to , _) => {
+                set.insert(*from);
+                set.insert(*to);
+            },
             StackItem::BatchAdd(item) => {
                 for pos in item.keys(){
                     set.insert(*pos);
@@ -163,14 +167,34 @@ impl<T: GridRunner> StackItem<T>{
                     set.insert(*pos);
                 }
             },
-            StackItem::Move(from, to , _) => {
-                set.insert(*from);
-                set.insert(*to);
-            }
         }
-
         set
     }
+
+    fn forward(&self, grid: &mut HashMap<GridNodePosition, T>){
+        match self{
+            StackItem::Add(pos, item) => {grid.insert(*pos, *item);},
+            StackItem::Remove(pos, _) => {grid.remove(pos);},
+            StackItem::Move(from, to, item) => {
+                grid.remove(from);
+                grid.insert(*to, *item);
+            },
+            _ => (),
+        }
+    }
+
+    fn reverse(&self, grid: &mut HashMap<GridNodePosition, T>){
+        match self{
+            StackItem::Add(pos, _) => {grid.remove(pos);},
+            StackItem::Remove(pos, item) => {grid.insert(*pos, *item);},
+            StackItem::Move(from, to, item) => {
+                grid.remove(to);
+                grid.insert(*from, *item);
+            }
+            _ => (),
+        }
+    }
+
 }
 
 //////////////////////////////////////////////////////////////////////////////////////
@@ -325,6 +349,17 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                     Event::Command(cmd) => {
                         if cmd.is(SET_DISABLED) {
                             self.state = GridState::Disabled;
+                        } else if cmd.is(ADD_PLAYBACK_INDEX) {
+                            if let Some(item) = data.save_stack.get(self.playback_index){
+                                item.forward(&mut data.grid);
+                                change_tracker.insert(item.clone());
+
+                            }
+                        } else if cmd.is(SUBTRACT_PLAYBACK_INDEX){
+                            if let Some(item) = data.save_stack.get(self.playback_index-1){
+                                item.reverse(&mut data.grid);
+                                change_tracker.insert(item.clone());
+                            }
                         }
                     },
         
