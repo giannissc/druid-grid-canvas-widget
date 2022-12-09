@@ -9,6 +9,8 @@ use druid::im::{HashMap, Vector, HashSet};
 use druid_color_thesaurus::*;
 use log::info;
 
+use crate::grid_widget_data_derived_lenses::save_stack;
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 /// 
 /// Command Selectors
@@ -195,6 +197,10 @@ impl<T: GridRunner> StackItem<T>{
         }
     }
 
+    fn update_stack(&self, stack: &mut Vector<StackItem<T>>){
+        stack.push_back(self.clone());
+    }
+
 }
 
 //////////////////////////////////////////////////////////////////////////////////////
@@ -288,6 +294,7 @@ pub struct GridWidget<T> {
     start_pos: GridNodePosition,
     state: GridState,
     playback_index: usize,
+    previous_stack_length: usize,
 }
 
 impl<T> GridWidget<T> {
@@ -307,6 +314,7 @@ impl<T> GridWidget<T> {
             start_pos: GridNodePosition { row: 0, col: 0 },
             state: GridState::Idle,
             playback_index: 0,
+            previous_stack_length: 0,
         }
     }
 
@@ -350,14 +358,16 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                                 item.forward(&mut data.grid);
                                 change_tracker.insert(item.clone());
                                 self.playback_index += 1;
-
                             }
                         } else if cmd.is(SUBTRACT_PLAYBACK_INDEX){
-                            if let Some(item) = data.save_stack.get(self.playback_index-1){
-                                item.reverse(&mut data.grid);
-                                change_tracker.insert(item.clone());
-                                self.playback_index -= 1;
+                            if self.playback_index > 0 {
+                                if let Some(item) = data.save_stack.get(self.playback_index - 1){
+                                    item.reverse(&mut data.grid);
+                                    change_tracker.insert(item.clone());
+                                    self.playback_index -= 1;
+                                }
                             }
+                            
                         }
                     },
         
@@ -505,12 +515,20 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
 
 
         if change_tracker.len() != 0 {
-            info!("Index Before: {:?}", self.playback_index);
-            info!("Tracker Size: {:?}", change_tracker.len());
-
+            
             // self.playback_index += change_tracker.len();
 
-            info!("Index After: {:?}\n", self.playback_index);
+            println!("Original: Playback index | {:?} vs {:?} | Stack Length", self.playback_index, data.save_stack.len());
+
+            let stack_length = data.save_stack.len();
+            if self.playback_index != stack_length && stack_length != self.previous_stack_length {
+                let stack_dif = stack_length - self.previous_stack_length; // Number of elements to stich to the first half of the stack
+                let playback_dif = stack_length - self.playback_index; // Number of elements to delete from the middle
+                let second_half = data.save_stack.slice(stack_length-stack_dif..);
+                data.save_stack.slice(stack_length-playback_dif..);
+                data.save_stack.append(second_half);
+                println!("Restich: Playback index | {:?} vs {:?} | Stack Length", self.playback_index, data.save_stack.len());
+            }            
 
             for item in &change_tracker {
                 for pos in item.get_positions().iter(){
@@ -519,6 +537,7 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
             }
 
             change_tracker.clear();
+            self.previous_stack_length = stack_length;
         }
         
         

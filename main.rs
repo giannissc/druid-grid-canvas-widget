@@ -1,14 +1,12 @@
 #![feature(associated_type_bounds)]
 
-use app_data_derived_lenses::grid_data;
-use druid::im::Vector;
 use druid::{theme, AppLauncher, Color, LocalizedString, WindowDesc, Data, Lens, Widget, WidgetExt, Size, WidgetId};
 
-use druid::widget::{Flex, Label, MainAxisAlignment, CrossAxisAlignment, Switch, Button,};
+use druid::widget::{Flex, Label, MainAxisAlignment, CrossAxisAlignment, Switch,};
 
 use druid_color_thesaurus::*;
 
-use druid_grid_graph_widget::{GridWidgetData, GridWidget, GridRunner, StackItem, GridNodePosition, ADD_PLAYBACK_INDEX, SUBTRACT_PLAYBACK_INDEX};
+use druid_grid_graph_widget::{GridWidgetData, GridWidget, GridRunner};
 
 //////////////////////////////////////////////////////////////////////////////////////
 // Constants
@@ -116,20 +114,12 @@ fn main() {
         .window_size((1000.0, 500.0))
         .title(LocalizedString::new("Placement & Routing Experiments"));
 
-    let mut data = AppData {
+    let data = AppData {
         is_paused: false,
         is_running: false,
         grid_data: GridWidgetData::new(GridNodeType::Wall(1)),
         updates_per_second: 10.0,
     };
-
-    let mut pattern = Vector::new();
-    pattern.push_back(StackItem::Add(GridNodePosition{row:0, col:0}, GridNodeType::Wall(1)));
-    pattern.push_back(StackItem::Add(GridNodePosition{row:0, col:1}, GridNodeType::Wall(1)));
-    pattern.push_back(StackItem::Add(GridNodePosition{row:0, col:2}, GridNodeType::Wall(1)));
-    pattern.push_back(StackItem::Add(GridNodePosition{row:1, col:0}, GridNodeType::Wall(1)));
-    pattern.push_back(StackItem::Add(GridNodePosition{row:2, col:0}, GridNodeType::Wall(1)));
-    data.grid_data.submit_to_stack(pattern);
 
     AppLauncher::with_window(main_window)
         .configure_env(|env, _| {
@@ -181,13 +171,7 @@ fn make_grid_options() -> impl Widget<AppData>{
         .with_child(Label::new("Grid Options").with_text_size(20.0))
         .with_child(
             Flex::row()
-                .with_child(Label::new("Playback: "))
-                .with_child(Button::new("Next").on_click(|ctx, data, env|{
-                    ctx.submit_command(ADD_PLAYBACK_INDEX.to(GRID_ID))
-                }))
-                .with_child(Button::new("Previous").on_click(|ctx, data, env|{
-                    ctx.submit_command(SUBTRACT_PLAYBACK_INDEX.to(GRID_ID))
-                }))
+                .with_child(Label::new("Mode: "))
         )
         .with_child(
             Flex::row()
