@@ -1,6 +1,3 @@
-#![feature(associated_type_bounds)]
-
-use app_data_derived_lenses::grid_data;
 use druid::im::Vector;
 use druid::{theme, AppLauncher, Color, LocalizedString, WindowDesc, Data, Lens, Widget, WidgetExt, Size, WidgetId};
 
@@ -8,7 +5,7 @@ use druid::widget::{Flex, Label, MainAxisAlignment, CrossAxisAlignment, Switch, 
 
 use druid_color_thesaurus::*;
 
-use druid_grid_graph_widget::{GridWidgetData, GridWidget, GridRunner, StackItem, GridNodePosition, ADD_PLAYBACK_INDEX, SUBTRACT_PLAYBACK_INDEX};
+use druid_grid_graph_widget::{GridWidgetData, GridWidget, GridRunner, StackItem, GridNodePosition,};
 
 //////////////////////////////////////////////////////////////////////////////////////
 // Constants
@@ -182,11 +179,15 @@ fn make_grid_options() -> impl Widget<AppData>{
         .with_child(
             Flex::row()
                 .with_child(Label::new("Playback: "))
-                .with_child(Button::new("Next").on_click(|ctx, data, env|{
-                    ctx.submit_command(ADD_PLAYBACK_INDEX.to(GRID_ID))
+                .with_child(Button::new("Next").lens(AppData::grid_data).on_click(|ctx, data, env|{
+                    if data.grid_data.playback_index != data.grid_data.get_stack_length() {
+                        data.grid_data.playback_index += 1;
+                    }
                 }))
-                .with_child(Button::new("Previous").on_click(|ctx, data, env|{
-                    ctx.submit_command(SUBTRACT_PLAYBACK_INDEX.to(GRID_ID))
+                .with_child(Button::new("Previous").lens(AppData::grid_data).on_click(|ctx, data, env|{
+                    if data.grid_data.playback_index != 0 {
+                        data.grid_data.playback_index -= 1;
+                    }
                 }))
         )
         .with_child(
