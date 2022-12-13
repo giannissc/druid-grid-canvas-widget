@@ -520,13 +520,15 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
 
             println!("Original: Playback index | {:?} vs {:?} | Stack Length", self.playback_index, data.save_stack.len());
 
-            let stack_length = data.save_stack.len();
+            let mut stack_length = data.save_stack.len();
             if self.playback_index != stack_length && stack_length != self.previous_stack_length {
+                println!("Previous Stack | {:?} vs {:?} | Current Stack", self.previous_stack_length, stack_length);
                 let stack_dif = stack_length - self.previous_stack_length; // Number of elements to stich to the first half of the stack
-                let playback_dif = stack_length - self.playback_index; // Number of elements to delete from the middle
+                let playback_dif = stack_length - self.playback_index + 1; // Number of elements to delete from the middle
                 let second_half = data.save_stack.slice(stack_length-stack_dif..);
                 data.save_stack.slice(stack_length-playback_dif..);
                 data.save_stack.append(second_half);
+                stack_length = data.save_stack.len();
                 println!("Restich: Playback index | {:?} vs {:?} | Stack Length", self.playback_index, data.save_stack.len());
             }            
 
@@ -545,7 +547,13 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
         
     }
 
-    fn lifecycle(&mut self, _ctx: &mut LifeCycleCtx, _event: &LifeCycle, _data: &GridWidgetData<T>, _env: &Env) {
+    fn lifecycle(&mut self, _ctx: &mut LifeCycleCtx, event: &LifeCycle, data: &GridWidgetData<T>, _env: &Env) {
+        match event{
+            LifeCycle::WidgetAdded => {
+                self.previous_stack_length = data.save_stack.len();
+            },
+            _ => {},
+        }
     }
 
     fn update(
