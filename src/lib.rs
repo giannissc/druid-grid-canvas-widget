@@ -1,7 +1,7 @@
 use std::hash::Hash;
 use std::marker::PhantomData;
 use druid::{BoxConstraints, Data, Env, Event, EventCtx, LayoutCtx, Lens, LifeCycle,
-    LifeCycleCtx, PaintCtx, RenderContext, UpdateCtx, Widget, Selector, Point, Rect, Size, Color, MouseButton, Command, Target};
+    LifeCycleCtx, PaintCtx, RenderContext, UpdateCtx, Widget, Selector, Point, Rect, Size, Color, MouseButton};
 
 use druid::im::{HashMap, Vector, HashSet};
 
