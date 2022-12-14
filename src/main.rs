@@ -179,9 +179,10 @@ fn make_grid_options() -> impl Widget<AppData>{
                         ctx.submit_command(Command::new(UPDATE_PLAYBACK_INDEX, (), Target::Widget(GRID_ID)));
                     }
                 }))
-                .with_child(Button::new("Previous").lens(AppData::grid_data).on_click(|_ctx, data, _env|{
+                .with_child(Button::new("Previous").lens(AppData::grid_data).on_click(|ctx, data, _env|{
                     if data.grid_data.playback_index != 0 {
                         data.grid_data.playback_index -= 1;
+                        ctx.submit_command(Command::new(UPDATE_PLAYBACK_INDEX, (), Target::Widget(GRID_ID)));
                     }
                 }))
         )
