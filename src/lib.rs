@@ -15,9 +15,7 @@ use log::info;
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 pub const SET_DISABLED: Selector = Selector::new("disabled-grid-state");
 pub const SET_ENABLED: Selector = Selector::new("idle-grid-state");
-const SET_PLAYBACK_INDEX: Selector<isize> = Selector::new("update-playback-index");
-// pub const INCREASE_PLAYBACK_INDEX:Selector = Selector::new("add-playback-inddex");
-// pub const DECREASE_PLAYBACK_INDEX:Selector = Selector::new("subtract-playback-inddex");
+pub const UPDATE_PLAYBACK_INDEX: Selector = Selector::new("update-playback-index");
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 /// 
@@ -209,7 +207,7 @@ pub struct GridWidgetData<T:GridRunner + PartialEq>{
     pub action: GridAction,
     pub node_type: T,
     pub playback_index: usize,
-    pub previous_stack_length: usize,
+    
 }
 
 impl<T:GridRunner + PartialEq> GridWidgetData<T>{
@@ -222,7 +220,6 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
             action: GridAction::Dynamic,
             node_type: initial_node,
             playback_index: 0,
-            previous_stack_length: 0,
         }
     }
 
@@ -297,6 +294,8 @@ pub struct GridWidget<T> {
     phantom: PhantomData<T>,
     start_pos: GridNodePosition,
     state: GridState,
+    previous_stack_length: usize,
+    previous_playback_index: usize,
 }
 
 impl<T> GridWidget<T> {
@@ -315,6 +314,8 @@ impl<T> GridWidget<T> {
             phantom: PhantomData,
             start_pos: GridNodePosition { row: 0, col: 0 },
             state: GridState::Idle,
+            previous_stack_length: 0,
+            previous_playback_index: 0,
         }
     }
 
@@ -353,14 +354,15 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                     Event::Command(cmd) => {
                         if cmd.is(SET_DISABLED) {
                             self.state = GridState::Disabled;
-                        } else if cmd.is(SET_PLAYBACK_INDEX) {
+                        } else if cmd.is(UPDATE_PLAYBACK_INDEX) {
                             info!("Playback index | {:?} vs {:?} | Stack Length", data.playback_index, data.save_stack.len());
 
-                            let diff = *cmd.get_unchecked(SET_PLAYBACK_INDEX);
-                            let range = 1..=(diff.abs() as usize);
+                            let playback_diff = data.playback_index as isize - self.previous_playback_index as isize;
+
+                            let range = 1..=(playback_diff.abs() as usize);
 
                             for i in range {
-                                if diff > 0 {
+                                if playback_diff > 0 {
                                     if let Some(item) = data.save_stack.get(data.playback_index-i) {
                                         item.forward(&mut data.grid);
                                         change_tracker.insert(item.clone());
@@ -524,9 +526,9 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
             info!("Original: Playback index | {:?} vs {:?} | Stack Length", data.playback_index, data.save_stack.len());
 
             let mut stack_length = data.save_stack.len();
-            if data.playback_index != stack_length && stack_length != data.previous_stack_length {
-                info!("Previous Stack | {:?} vs {:?} | Current Stack", data.previous_stack_length, stack_length);
-                let stack_dif = stack_length - data.previous_stack_length; // Number of elements to stich to the first half of the stack
+            if data.playback_index != stack_length && stack_length != self.previous_stack_length {
+                info!("Previous Stack | {:?} vs {:?} | Current Stack", self.previous_stack_length, stack_length);
+                let stack_dif = stack_length - self.previous_stack_length; // Number of elements to stich to the first half of the stack
                 let playback_dif = stack_length - data.playback_index + 1; // Number of elements to delete from the middle
                 let second_half = data.save_stack.slice(stack_length-stack_dif..);
                 data.save_stack.slice(stack_length-playback_dif..);
@@ -542,7 +544,7 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
             }
 
             change_tracker.clear();
-            data.previous_stack_length = stack_length;
+            self.previous_stack_length = stack_length;
         }
         
         
@@ -559,16 +561,7 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
         old_data: &GridWidgetData<T>,
         data: &GridWidgetData<T>,
         _env: &Env,
-    ) {
-        //debug!("Running grid widget update method");
-        //debug!("Difference: {:?}", data.grid.get_storage().difference(old_data.grid.get_storage()));
-
-        let playback_diff = data.playback_index as isize - old_data.playback_index as isize;
-        if  playback_diff != 0  {
-            info!("New Playback Index | {:?} vs {:?} | Old Playback Index", data.playback_index, old_data.playback_index);
-            ctx.submit_command(Command::new(SET_PLAYBACK_INDEX, playback_diff, Target::Widget(ctx.widget_id())));
-        }
-        
+    ) {       
         if data.show_grid_axis != old_data.show_grid_axis {
             //debug!("Painting the whole window on grid axis change");
             ctx.request_paint();
