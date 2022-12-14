@@ -179,12 +179,12 @@ fn make_grid_options() -> impl Widget<AppData>{
         .with_child(
             Flex::row()
                 .with_child(Label::new("Playback: "))
-                .with_child(Button::new("Next").lens(AppData::grid_data).on_click(|ctx, data, env|{
+                .with_child(Button::new("Next").lens(AppData::grid_data).on_click(|_ctx, data, _env|{
                     if data.grid_data.playback_index != data.grid_data.get_stack_length() {
                         data.grid_data.playback_index += 1;
                     }
                 }))
-                .with_child(Button::new("Previous").lens(AppData::grid_data).on_click(|ctx, data, env|{
+                .with_child(Button::new("Previous").lens(AppData::grid_data).on_click(|_ctx, data, _env|{
                     if data.grid_data.playback_index != 0 {
                         data.grid_data.playback_index -= 1;
                     }

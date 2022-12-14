@@ -1,7 +1,5 @@
 use std::hash::Hash;
 use std::marker::PhantomData;
-
-use druid::platform_menus::mac::file::print;
 use druid::{BoxConstraints, Data, Env, Event, EventCtx, LayoutCtx, Lens, LifeCycle,
     LifeCycleCtx, PaintCtx, RenderContext, UpdateCtx, Widget, Selector, Point, Rect, Size, Color, MouseButton, Command, Target};
 
@@ -356,23 +354,13 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                         if cmd.is(SET_DISABLED) {
                             self.state = GridState::Disabled;
                         } else if cmd.is(SET_PLAYBACK_INDEX) {
-                            println!("Received Command");
-
-                            println!("Playback index | {:?} vs {:?} | Stack Length", data.playback_index, data.save_stack.len());
+                            info!("Playback index | {:?} vs {:?} | Stack Length", data.playback_index, data.save_stack.len());
 
                             let diff = *cmd.get_unchecked(SET_PLAYBACK_INDEX);
-
-                            println!("Diff: {:?}", diff);
-
                             let range = 1..=(diff.abs() as usize);
 
-                            println!("Range: {:?}", range);
-
                             for i in range {
-                                println!("Index: {:?}", i);
-
                                 if diff > 0 {
-                                    println!("add");
                                     if let Some(item) = data.save_stack.get(data.playback_index-i) {
                                         item.forward(&mut data.grid);
                                         change_tracker.insert(item.clone());
@@ -577,9 +565,8 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
 
         let playback_diff = data.playback_index as isize - old_data.playback_index as isize;
         if  playback_diff != 0  {
-            //println!("New Playback Index | {:?} vs {:?} | Old Playback Index", data.playback_index, old_data.playback_index);
+            info!("New Playback Index | {:?} vs {:?} | Old Playback Index", data.playback_index, old_data.playback_index);
             ctx.submit_command(Command::new(SET_PLAYBACK_INDEX, playback_diff, Target::Widget(ctx.widget_id())));
-            println!("Submit Command");
         }
         
         if data.show_grid_axis != old_data.show_grid_axis {
