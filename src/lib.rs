@@ -204,13 +204,14 @@ impl<T: GridRunner> StackItem<T>{
 //////////////////////////////////////////////////////////////////////////////////////
 #[derive(Clone, PartialEq, Data, Lens)]
 pub struct GridWidgetData<T:GridRunner + PartialEq>{
-    grid: HashMap<GridNodePosition, T>,
+    pub grid: HashMap<GridNodePosition, T>,
     save_stack: Vector<StackItem<T>>,
     // restore_stack: Vector<StackItem<T>>,
     pub show_grid_axis: bool,
     pub action: GridAction,
     pub node_type: T,
     pub playback_index: usize,
+    pub previous_stack_length: usize,
 }
 
 impl<T:GridRunner + PartialEq> GridWidgetData<T>{
@@ -223,6 +224,7 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
             action: GridAction::Dynamic,
             node_type: initial_node,
             playback_index: 0,
+            previous_stack_length: 0,
         }
     }
 
@@ -297,7 +299,6 @@ pub struct GridWidget<T> {
     phantom: PhantomData<T>,
     start_pos: GridNodePosition,
     state: GridState,
-    previous_stack_length: usize,
 }
 
 impl<T> GridWidget<T> {
@@ -316,7 +317,6 @@ impl<T> GridWidget<T> {
             phantom: PhantomData,
             start_pos: GridNodePosition { row: 0, col: 0 },
             state: GridState::Idle,
-            previous_stack_length: 0,
         }
     }
 
@@ -536,9 +536,9 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
             info!("Original: Playback index | {:?} vs {:?} | Stack Length", data.playback_index, data.save_stack.len());
 
             let mut stack_length = data.save_stack.len();
-            if data.playback_index != stack_length && stack_length != self.previous_stack_length {
-                info!("Previous Stack | {:?} vs {:?} | Current Stack", self.previous_stack_length, stack_length);
-                let stack_dif = stack_length - self.previous_stack_length; // Number of elements to stich to the first half of the stack
+            if data.playback_index != stack_length && stack_length != data.previous_stack_length {
+                info!("Previous Stack | {:?} vs {:?} | Current Stack", data.previous_stack_length, stack_length);
+                let stack_dif = stack_length - data.previous_stack_length; // Number of elements to stich to the first half of the stack
                 let playback_dif = stack_length - data.playback_index + 1; // Number of elements to delete from the middle
                 let second_half = data.save_stack.slice(stack_length-stack_dif..);
                 data.save_stack.slice(stack_length-playback_dif..);
@@ -554,7 +554,7 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
             }
 
             change_tracker.clear();
-            self.previous_stack_length = stack_length;
+            data.previous_stack_length = stack_length;
         }
         
         
