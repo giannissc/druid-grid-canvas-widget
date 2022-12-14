@@ -1,7 +1,7 @@
 use druid::im::Vector;
 use druid::{theme, AppLauncher, Color, LocalizedString, WindowDesc, Data, Lens, Widget, WidgetExt, Size, WidgetId, Command, Target};
 
-use druid::widget::{Flex, Label, MainAxisAlignment, CrossAxisAlignment, Switch, Button,};
+use druid::widget::{Flex, Label, MainAxisAlignment, CrossAxisAlignment, Switch, Button, ViewSwitcher, Slider,};
 
 use druid_color_thesaurus::*;
 
