@@ -176,7 +176,16 @@ impl<T: GridRunner> StackItem<T>{
                 grid.remove(from);
                 grid.insert(*to, *item);
             },
-            _ => (),
+            StackItem::BatchAdd(items) => {
+                for (key, item) in items {
+                    grid.insert(*key, *item);
+                }
+            },
+            StackItem::BatchRemove(items) => {
+                for (key, _) in items {
+                    grid.remove(key);
+                }
+            }
         }
     }
 
@@ -188,7 +197,17 @@ impl<T: GridRunner> StackItem<T>{
                 grid.remove(to);
                 grid.insert(*from, *item);
             }
-            _ => (),
+            StackItem::BatchAdd(items) => {
+                for (key, _) in items {
+                    grid.remove(key);
+                    
+                }
+            },
+            StackItem::BatchRemove(items) => {
+                for (key, item) in items {
+                    grid.insert(*key, *item);
+                }
+            }
         }
     }
 }
