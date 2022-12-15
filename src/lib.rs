@@ -291,6 +291,10 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
         &self.grid
     }
 
+    pub fn get_item(&self, pos:&GridNodePosition) -> Option<&T>{
+        self.grid.get(pos)
+    }
+
 }
 
 
