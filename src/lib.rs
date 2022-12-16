@@ -280,16 +280,31 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
         false
     }
 
-    pub fn submit_to_stack(&mut self, mut list: Vector<StackItem<T>>) {
-        list.retain(|stack_item| {
-            if let StackItem::Add(pos, item) = stack_item{
-                let option = self.grid.get(pos);
-                return item.can_add(option)
-            }
-            false
-        });
+    pub fn submit_to_stack(&mut self, list: Vector<StackItem<T>>) {
+        let mut val_list = Vector::new();
+        
+        for stack_item in list {
+            match stack_item {
+                StackItem::Add(pos, item) => {
+                    let option = self.grid.get(&pos);
+                    if item.can_add(option) {val_list.push_back(stack_item)}
+                },
+                StackItem::BatchAdd(mut map) => {
+                    map.retain(|pos, map_item|{
+                        let option = self.grid.get(pos);
+                        map_item.can_add(option)
+                    });
 
-        self.save_stack.append(list)
+                    if !map.is_empty(){
+
+                        val_list.push_back(StackItem::BatchAdd(map));
+                    }
+                },
+                _ => (),
+            }
+        }
+
+        self.save_stack.append(val_list)
     }
 
     pub fn get_stack_length(&self) -> usize {
