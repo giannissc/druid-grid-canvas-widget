@@ -323,9 +323,13 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
                 );
             }
         }
+        
+        for (pos,item) in &map{
+            self.grid.insert(*pos, *item);
+        }
 
         self.save_stack.push_back(StackItem::BatchAdd(map));
-        
+
     }
 
     pub fn submit_to_stack(&mut self, list: Vector<StackItem<T>>) {
