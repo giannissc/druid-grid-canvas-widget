@@ -280,6 +280,50 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
         false
     }
 
+    pub fn add_node_perimeter(
+        &mut self,
+        pos: GridNodePosition,
+        row_n: usize,
+        column_n: usize,
+        tool: T,
+    ) {
+        for row in pos.row..pos.row + row_n {
+            //debug!("Add node perimeter");
+            //debug!("Row: {:?}", row);
+            if row == pos.row || row == pos.row + row_n - 1 {
+                // Top and Bottom Boundaries
+                //debug!("Printing top/bottom boundary");
+                for column in pos.col..pos.col + column_n {
+                    self.add_node(
+                        &GridNodePosition {
+                            row: row,
+                            col: column,
+                        },
+                        tool,
+                    );
+                }
+            } else {
+                //debug!("Printing left/right boundary");
+                // Left Boundary
+                self.add_node(
+                    &GridNodePosition {
+                        row: row,
+                        col: pos.col,
+                    },
+                    tool,
+                );
+                // Right Boundary
+                self.add_node(
+                    &GridNodePosition {
+                        row: row,
+                        col: pos.col + column_n - 1,
+                    },
+                    tool,
+                );
+            }
+        }
+    }
+
     pub fn submit_to_stack(&mut self, list: Vector<StackItem<T>>) {
         let mut val_list = Vector::new();
         
