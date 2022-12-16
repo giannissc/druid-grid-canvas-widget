@@ -617,18 +617,18 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
             
             // self.playback_index += change_tracker.len();
 
-            println!("Original: Playback index | {:?} vs {:?} | Stack Length", data.playback_index, data.save_stack.len());
+            info!("Original: Playback index | {:?} vs {:?} | Stack Length", data.playback_index, data.save_stack.len());
 
             let mut stack_length = data.save_stack.len();
             if data.playback_index != stack_length && stack_length != self.previous_stack_length {
-                println!("Previous Stack | {:?} vs {:?} | Current Stack", self.previous_stack_length, stack_length);
+                info!("Previous Stack | {:?} vs {:?} | Current Stack", self.previous_stack_length, stack_length);
                 let stack_dif = stack_length - self.previous_stack_length; // Number of elements to stich to the first half of the stack
                 let playback_dif = stack_length - data.playback_index + 1; // Number of elements to delete from the middle
                 let second_half = data.save_stack.slice(stack_length-stack_dif..);
                 data.save_stack.slice(stack_length-playback_dif..);
                 data.save_stack.append(second_half);
                 stack_length = data.save_stack.len();
-                println!("Restich: Playback index | {:?} vs {:?} | Stack Length", data.playback_index, data.save_stack.len());
+                info!("Restich: Playback index | {:?} vs {:?} | Stack Length", data.playback_index, data.save_stack.len());
             }            
 
             for item in &change_tracker {
