@@ -16,7 +16,8 @@ use log::info;
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 pub const SET_DISABLED: Selector = Selector::new("disabled-grid-state");
 pub const SET_ENABLED: Selector = Selector::new("idle-grid-state");
-pub const UPDATE_PLAYBACK_INDEX: Selector = Selector::new("update-playback-index");
+pub const UPDATE_GRID_PLAYBACK: Selector = Selector::new("update-grid-playback");
+pub const UPDATE_PAINT_PLAYBACK: Selector = Selector::new("update-paint-playback");
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 /// 
@@ -367,6 +368,41 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
         &self.grid
     }
 
+    pub fn clear_all(&mut self){
+        self.save_stack.push_back(StackItem::BatchRemove(self.grid.clone()));
+        self.grid.clear();
+    }
+
+    pub fn clear_except(&mut self, set: HashSet<T>){
+        let mut map: HashMap<GridNodePosition, T> = HashMap::new();
+        for item_type in set {
+            self.grid.retain(|pos, item|{
+                if *item == item_type {
+                    true
+                } else {
+                    map.insert(*pos, *item);
+                    false
+                }
+            })
+        }
+        self.save_stack.push_back(StackItem::BatchRemove(map));
+    }
+
+    pub fn clear_only(&mut self, set: HashSet<T>){
+        let mut map: HashMap<GridNodePosition, T> = HashMap::new();
+        for item_type in set {
+            self.grid.retain(|pos, item|{
+                if *item == item_type {
+                    map.insert(*pos, *item);
+                    false
+                } else {
+                    true
+                }
+            })
+        }
+        self.save_stack.push_back(StackItem::BatchRemove(map));
+    }
+
 }
 
 
@@ -449,7 +485,7 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                     Event::Command(cmd) => {
                         if cmd.is(SET_DISABLED) {
                             self.state = GridState::Disabled;
-                        } else if cmd.is(UPDATE_PLAYBACK_INDEX) {
+                        } else if cmd.is(UPDATE_GRID_PLAYBACK) {
                             info!("Playback index | {:?} vs {:?} | Stack Length", data.playback_index, data.save_stack.len());
 
                             let playback_diff = data.playback_index as isize - self.previous_playback_index as isize;
@@ -469,6 +505,9 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                                     }
                                 }
                             }
+                        } else if cmd.is(UPDATE_PAINT_PLAYBACK) {
+                            let item = data.save_stack.get(data.playback_index - 1).unwrap();
+                            change_tracker.insert(item.clone());
                         }
                     },
                     Event::MouseDown(e) => {

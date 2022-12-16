@@ -5,7 +5,7 @@ use druid::widget::{Flex, Label, MainAxisAlignment, CrossAxisAlignment, Switch, 
 
 use druid_color_thesaurus::*;
 
-use druid_grid_graph_widget::{GridWidgetData, GridWidget, GridRunner, StackItem, GridNodePosition, UPDATE_PLAYBACK_INDEX};
+use druid_grid_graph_widget::{GridWidgetData, GridWidget, GridRunner, StackItem, GridNodePosition, UPDATE_GRID_PLAYBACK};
 
 //////////////////////////////////////////////////////////////////////////////////////
 // Constants
@@ -176,13 +176,13 @@ fn make_grid_options() -> impl Widget<AppData>{
                 .with_child(Button::new("Next").lens(AppData::grid_data).on_click(|ctx, data, _env|{
                     if data.grid_data.playback_index != data.grid_data.get_stack_length() {
                         data.grid_data.playback_index += 1;
-                        ctx.submit_command(Command::new(UPDATE_PLAYBACK_INDEX, (), Target::Widget(GRID_ID)));
+                        ctx.submit_command(Command::new(UPDATE_GRID_PLAYBACK, (), Target::Widget(GRID_ID)));
                     }
                 }))
                 .with_child(Button::new("Previous").lens(AppData::grid_data).on_click(|ctx, data, _env|{
                     if data.grid_data.playback_index != 0 {
                         data.grid_data.playback_index -= 1;
-                        ctx.submit_command(Command::new(UPDATE_PLAYBACK_INDEX, (), Target::Widget(GRID_ID)));
+                        ctx.submit_command(Command::new(UPDATE_GRID_PLAYBACK, (), Target::Widget(GRID_ID)));
                     }
                 }))
         )
