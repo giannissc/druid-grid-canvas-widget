@@ -1,4 +1,5 @@
 use std::hash::Hash;
+use std::iter::Enumerate;
 use std::marker::PhantomData;
 use druid::{BoxConstraints, Data, Env, Event, EventCtx, LayoutCtx, Lens, LifeCycle,
     LifeCycleCtx, PaintCtx, RenderContext, UpdateCtx, Widget, Selector, Point, Rect, Size, Color, MouseButton};
@@ -279,8 +280,16 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
         false
     }
 
-    pub fn submit_to_stack(&mut self, other: Vector<StackItem<T>>) {
-        self.save_stack.append(other)
+    pub fn submit_to_stack(&mut self, mut list: Vector<StackItem<T>>) {
+        list.retain(|stack_item| {
+            if let StackItem::Add(pos, item) = stack_item{
+                let option = self.grid.get(pos);
+                return item.can_add(option)
+            }
+            false
+        });
+
+        self.save_stack.append(list)
     }
 
     pub fn get_stack_length(&self) -> usize {
@@ -289,10 +298,6 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
 
     pub fn get_grid(&self) -> &HashMap<GridNodePosition, T> {
         &self.grid
-    }
-
-    pub fn get_item(&self, pos:&GridNodePosition) -> Option<&T>{
-        self.grid.get(pos)
     }
 
 }
