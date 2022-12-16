@@ -287,6 +287,7 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
         column_n: usize,
         tool: T,
     ) {
+        let mut map: HashMap<GridNodePosition, T> = HashMap::new();
         for row in pos.row..pos.row + row_n {
             //debug!("Add node perimeter");
             //debug!("Row: {:?}", row);
@@ -294,8 +295,8 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
                 // Top and Bottom Boundaries
                 //debug!("Printing top/bottom boundary");
                 for column in pos.col..pos.col + column_n {
-                    self.add_node(
-                        &GridNodePosition {
+                    map.insert(
+                        GridNodePosition {
                             row: row,
                             col: column,
                         },
@@ -305,16 +306,16 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
             } else {
                 //debug!("Printing left/right boundary");
                 // Left Boundary
-                self.add_node(
-                    &GridNodePosition {
+                map.insert(
+                    GridNodePosition {
                         row: row,
                         col: pos.col,
                     },
                     tool,
                 );
                 // Right Boundary
-                self.add_node(
-                    &GridNodePosition {
+                map.insert(
+                    GridNodePosition {
                         row: row,
                         col: pos.col + column_n - 1,
                     },
@@ -322,6 +323,9 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
                 );
             }
         }
+
+        self.save_stack.push_back(StackItem::BatchAdd(map));
+        
     }
 
     pub fn submit_to_stack(&mut self, list: Vector<StackItem<T>>) {
