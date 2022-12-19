@@ -1,5 +1,4 @@
 use std::hash::Hash;
-use std::iter::Enumerate;
 use std::marker::PhantomData;
 use druid::{BoxConstraints, Data, Env, Event, EventCtx, LayoutCtx, Lens, LifeCycle,
     LifeCycleCtx, PaintCtx, RenderContext, UpdateCtx, Widget, Selector, Point, Rect, Size, Color, MouseButton};
@@ -138,7 +137,7 @@ pub enum GridAction{
 //////////////////////////////////////////////////////////////////////////////////////
 #[derive(Clone, PartialEq, Data, Debug, Hash, Eq)]
 pub enum StackItem<T: GridRunner>{
-    Add(GridNodePosition, T),
+    Add(GridNodePosition, T, Option<T>),
     Remove(GridNodePosition, T),
     Move(GridNodePosition, GridNodePosition, T),
     BatchAdd(HashMap<GridNodePosition, T>),
@@ -150,7 +149,7 @@ impl<T: GridRunner> StackItem<T>{
         let mut set: HashSet<GridNodePosition> = HashSet::new();
         
         match self{
-            StackItem::Add(pos, _) => {set.insert(*pos);},
+            StackItem::Add(pos, _, _) => {set.insert(*pos);},
             StackItem::Remove(pos, _) => {set.insert(*pos);},
             StackItem::Move(from, to , _) => {
                 set.insert(*from);
@@ -172,7 +171,7 @@ impl<T: GridRunner> StackItem<T>{
 
     fn forward(&self, grid: &mut HashMap<GridNodePosition, T>){
         match self{
-            StackItem::Add(pos, item) => {grid.insert(*pos, *item);},
+            StackItem::Add(pos, current_item, _) => {grid.insert(*pos, *current_item);},
             StackItem::Remove(pos, _) => {grid.remove(pos);},
             StackItem::Move(from, to, item) => {
                 grid.remove(from);
@@ -193,7 +192,7 @@ impl<T: GridRunner> StackItem<T>{
 
     fn reverse(&self, grid: &mut HashMap<GridNodePosition, T>){
         match self{
-            StackItem::Add(pos, _) => {grid.remove(pos);},
+            StackItem::Add(pos, _, _) => {grid.remove(pos);},
             StackItem::Remove(pos, item) => {grid.insert(*pos, *item);},
             StackItem::Move(from, to, item) => {
                 grid.remove(to);
@@ -246,9 +245,16 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
 
     fn add_node(&mut self, pos: &GridNodePosition, item: T) -> bool{
         let option = self.grid.get(pos);
+
+        let command_item;
+        if option.is_none() {
+            command_item = StackItem::Add(*pos, item, None);
+        } else {
+            command_item = StackItem::Add(*pos, item, Some(*option.unwrap()));
+        }
+        
         if item.can_add(option){
             self.grid.insert(*pos, item);
-            let command_item = StackItem::Add(*pos, item);
             self.save_stack.push_back(command_item);
             return true;
         }
@@ -338,9 +344,9 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
         
         for stack_item in list {
             match stack_item {
-                StackItem::Add(pos, item) => {
+                StackItem::Add(pos, current_item, _) => {
                     let option = self.grid.get(&pos);
-                    if item.can_add(option) {val_list.push_back(stack_item)}
+                    if current_item.can_add(option) {val_list.push_back(stack_item)}
                 },
                 StackItem::BatchAdd(mut map) => {
                     map.retain(|pos, map_item|{

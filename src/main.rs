@@ -121,11 +121,11 @@ fn main() {
     };
 
     let mut pattern = Vector::new();
-    pattern.push_back(StackItem::Add(GridNodePosition{row:0, col:0}, GridNodeType::Wall(1)));
-    pattern.push_back(StackItem::Add(GridNodePosition{row:0, col:1}, GridNodeType::Wall(1)));
-    pattern.push_back(StackItem::Add(GridNodePosition{row:0, col:2}, GridNodeType::Wall(1)));
-    pattern.push_back(StackItem::Add(GridNodePosition{row:1, col:0}, GridNodeType::Wall(1)));
-    pattern.push_back(StackItem::Add(GridNodePosition{row:2, col:0}, GridNodeType::Wall(1)));
+    pattern.push_back(StackItem::Add(GridNodePosition{row:0, col:0}, GridNodeType::Wall(1), None));
+    pattern.push_back(StackItem::Add(GridNodePosition{row:0, col:1}, GridNodeType::Wall(1), None));
+    pattern.push_back(StackItem::Add(GridNodePosition{row:0, col:2}, GridNodeType::Wall(1), None));
+    pattern.push_back(StackItem::Add(GridNodePosition{row:1, col:0}, GridNodeType::Wall(1), None));
+    pattern.push_back(StackItem::Add(GridNodePosition{row:2, col:0}, GridNodeType::Wall(1), None));
     data.grid_data.submit_to_stack(pattern);
 
     AppLauncher::with_window(main_window)
