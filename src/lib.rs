@@ -192,7 +192,12 @@ impl<T: GridRunner> StackItem<T>{
 
     fn reverse(&self, grid: &mut HashMap<GridNodePosition, T>){
         match self{
-            StackItem::Add(pos, _, _) => {grid.remove(pos);},
+            StackItem::Add(pos, _, previous_item) => {
+                grid.remove(pos);
+                if let Some(previous_node) = previous_item {
+                    grid.insert(*pos, *previous_node);
+                }
+            },
             StackItem::Remove(pos, item) => {grid.insert(*pos, *item);},
             StackItem::Move(from, to, item) => {
                 grid.remove(to);
