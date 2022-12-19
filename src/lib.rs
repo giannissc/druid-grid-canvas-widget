@@ -682,9 +682,12 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
         }
     }
 
-    fn lifecycle(&mut self, _ctx: &mut LifeCycleCtx, event: &LifeCycle, data: &GridWidgetData<T>, _env: &Env) {
+    fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, data: &GridWidgetData<T>, _env: &Env) {
         if let LifeCycle::WidgetAdded = event {
             self.previous_stack_length = data.save_stack.len();
+            if data.playback_index != 0 {
+                ctx.submit_command(UPDATE_GRID_PLAYBACK);
+            }
         }
     }
 
