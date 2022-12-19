@@ -140,7 +140,7 @@ pub enum StackItem<T: GridRunner>{
     Add(GridNodePosition, T, Option<T>),
     Remove(GridNodePosition, T),
     Move(GridNodePosition, GridNodePosition, T),
-    BatchAdd(HashMap<GridNodePosition, T>),
+    BatchAdd(HashMap<GridNodePosition, (T, Option<T>)>),
     BatchRemove(HashMap<GridNodePosition, T>),
 }
 
@@ -178,8 +178,8 @@ impl<T: GridRunner> StackItem<T>{
                 grid.insert(*to, *item);
             },
             StackItem::BatchAdd(items) => {
-                for (key, item) in items {
-                    grid.insert(*key, *item);
+                for (key, (current_item, _)) in items {
+                    grid.insert(*key, *current_item);
                 }
             },
             StackItem::BatchRemove(items) => {
@@ -204,14 +204,16 @@ impl<T: GridRunner> StackItem<T>{
                 grid.insert(*from, *item);
             }
             StackItem::BatchAdd(items) => {
-                for (key, _) in items {
-                    grid.remove(key);
-                    
+                for (pos, (_, previous_item)) in items {
+                    grid.remove(pos);
+                    if let Some(previous_node) = previous_item {
+                        grid.insert(*pos, *previous_node);
+                    }
                 }
             },
             StackItem::BatchRemove(items) => {
-                for (key, item) in items {
-                    grid.insert(*key, *item);
+                for (pos, item) in items {
+                    grid.insert(*pos, *item);
                 }
             }
         }
@@ -299,7 +301,7 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
         column_n: usize,
         tool: T,
     ) {
-        let mut map: HashMap<GridNodePosition, T> = HashMap::new();
+        let mut map: HashMap<GridNodePosition, (T, Option<T>)> = HashMap::new();
         for row in pos.row..pos.row + row_n {
             //debug!("Add node perimeter");
             //debug!("Row: {:?}", row);
@@ -312,7 +314,7 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
                             row: row,
                             col: column,
                         },
-                        tool,
+                        (tool, None),
                     );
                 }
             } else {
@@ -323,7 +325,7 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
                         row: row,
                         col: pos.col,
                     },
-                    tool,
+                    (tool, None),
                 );
                 // Right Boundary
                 map.insert(
@@ -331,13 +333,13 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
                         row: row,
                         col: pos.col + column_n - 1,
                     },
-                    tool,
+                    (tool, None),
                 );
             }
         }
         
-        for (pos,item) in &map{
-            self.grid.insert(*pos, *item);
+        for (pos, (current_item, _)) in &map{
+            self.grid.insert(*pos, *current_item);
         }
 
         self.save_stack.push_back(StackItem::BatchAdd(map));
@@ -354,9 +356,9 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
                     if current_item.can_add(option) {val_list.push_back(stack_item)}
                 },
                 StackItem::BatchAdd(mut map) => {
-                    map.retain(|pos, map_item|{
+                    map.retain(|pos, (current_item, _)|{
                         let option = self.grid.get(pos);
-                        map_item.can_add(option)
+                        current_item.can_add(option)
                     });
 
                     if !map.is_empty(){
