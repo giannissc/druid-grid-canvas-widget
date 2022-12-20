@@ -17,6 +17,7 @@ pub const SET_DISABLED: Selector = Selector::new("disabled-grid-state");
 pub const SET_ENABLED: Selector = Selector::new("idle-grid-state");
 pub const UPDATE_GRID_PLAYBACK: Selector = Selector::new("update-grid-playback");
 pub const UPDATE_PAINT_PLAYBACK: Selector = Selector::new("update-paint-playback");
+pub const REQUEST_PAINT: Selector =  Selector::new("request-paint");
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 /// 
@@ -521,6 +522,8 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                         } else if cmd.is(UPDATE_PAINT_PLAYBACK) {
                             let item = data.save_stack.get(data.playback_index - 1).unwrap();
                             change_tracker.insert(item.clone());
+                        } else if cmd.is(REQUEST_PAINT) {
+                            ctx.request_paint();
                         }
                     },
                     Event::MouseDown(e) => {

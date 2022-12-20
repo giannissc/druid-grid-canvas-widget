@@ -1,7 +1,7 @@
 use druid::im::Vector;
 use druid::{theme, AppLauncher, Color, LocalizedString, WindowDesc, Data, Lens, Widget, WidgetExt, Size, WidgetId, Command, Target};
 
-use druid::widget::{Flex, Label, MainAxisAlignment, CrossAxisAlignment, Switch, Button, ViewSwitcher, Slider,};
+use druid::widget::{Flex, Label, MainAxisAlignment, CrossAxisAlignment, Switch, Button,};
 
 use druid_color_thesaurus::*;
 
@@ -59,7 +59,6 @@ impl GridRunner for GridNodeType<Net> {
             GridNodeType::ExploredNode(_) => &brown::MAROON,
             GridNodeType::ChosenPath(_) => &green::ASH_GRAY,
         }
-        
     }
 
     fn can_add(&self, other: Option<&Self>) -> bool {
