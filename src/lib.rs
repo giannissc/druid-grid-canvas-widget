@@ -1,7 +1,7 @@
 use std::hash::Hash;
 use std::marker::PhantomData;
 use druid::{BoxConstraints, Data, Env, Event, EventCtx, LayoutCtx, Lens, LifeCycle,
-    LifeCycleCtx, PaintCtx, RenderContext, UpdateCtx, Widget, Selector, Point, Rect, Size, Color, MouseButton};
+    LifeCycleCtx, PaintCtx, RenderContext, UpdateCtx, Widget, Selector, Point, Rect, Size, Color, MouseButton,};
 
 use druid::im::{HashMap, Vector, HashSet};
 
@@ -230,12 +230,10 @@ impl<T: GridRunner> StackItem<T>{
 pub struct GridWidgetData<T:GridRunner + PartialEq>{
     pub grid: HashMap<GridNodePosition, T>,
     save_stack: Vector<StackItem<T>>,
-    // restore_stack: Vector<StackItem<T>>,
     pub show_grid_axis: bool,
     pub action: GridAction,
     pub node_type: T,
     pub playback_index: usize,
-    
 }
 
 impl<T:GridRunner + PartialEq> GridWidgetData<T>{
@@ -243,7 +241,6 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
         GridWidgetData {
             grid: HashMap::new(),
             save_stack: Vector::new(),
-            // restore_stack: Vector::new(),
             show_grid_axis: true,
             action: GridAction::Dynamic,
             node_type: initial_node,
@@ -722,7 +719,7 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
 
     fn layout(
         &mut self,
-        _layout_ctx: &mut LayoutCtx,
+        _ctx: &mut LayoutCtx,
         bc: &BoxConstraints,
         _data: &GridWidgetData<T>,
         _env: &Env,
