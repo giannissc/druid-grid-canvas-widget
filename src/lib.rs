@@ -69,7 +69,7 @@ impl GridNodePosition {
     }
 
     // Also known in vlsi as the X Architecture
-    pub fn neighbors_octilinear(self) -> [GridNodePosition; 8] {
+    pub fn neighbors_diagonal(self) -> [GridNodePosition; 4] {
         let above = self.above();
         let below = self.below();
         let left = self.left();
@@ -79,10 +79,6 @@ impl GridNodePosition {
         let below_left = below.left();
         let below_right = below.right();
         [
-            above,
-            below,
-            left,
-            right,
             above_left,
             above_right,
             below_left,
