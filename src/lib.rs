@@ -1,12 +1,21 @@
 use std::hash::Hash;
 use std::marker::PhantomData;
+use druid::kurbo::Circle;
 use druid::{BoxConstraints, Data, Env, Event, EventCtx, LayoutCtx, Lens, LifeCycle,
-    LifeCycleCtx, PaintCtx, RenderContext, UpdateCtx, Widget, Selector, Point, Rect, Size, Color, MouseButton,};
+    LifeCycleCtx, PaintCtx, RenderContext, UpdateCtx, Widget, Selector, Point, Rect, Size, Color, MouseButton, WidgetPod, Affine,};
 
 use druid::im::{HashMap, Vector, HashSet};
 
-use druid_color_thesaurus::*;
+use druid_color_thesaurus::white;
 use log::info;
+use panning::PanningData;
+use zooming::ZoomData;
+
+pub mod panning;
+pub mod zooming;
+pub mod snapping;
+pub mod rotation;
+// pub mod canvas;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 /// 
@@ -72,8 +81,6 @@ impl GridNodePosition {
     pub fn neighbors_diagonal(self) -> [GridNodePosition; 4] {
         let above = self.above();
         let below = self.below();
-        let left = self.left();
-        let right = self.right();
         let above_left = above.left();
         let above_right = above.right();
         let below_left = below.left();
@@ -226,7 +233,6 @@ impl<T: GridRunner> StackItem<T>{
 pub struct GridWidgetData<T:GridRunner + PartialEq>{
     pub grid: HashMap<GridNodePosition, T>,
     save_stack: Vector<StackItem<T>>,
-    pub show_grid_axis: bool,
     pub action: GridAction,
     pub node_type: T,
     pub playback_index: usize,
@@ -237,7 +243,6 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
         GridWidgetData {
             grid: HashMap::new(),
             save_stack: Vector::new(),
-            show_grid_axis: true,
             action: GridAction::Dynamic,
             node_type: initial_node,
             playback_index: 0,
@@ -422,13 +427,7 @@ impl<T:GridRunner + PartialEq> GridWidgetData<T>{
 
 #[derive(Clone, PartialEq, Data, Lens)]
 pub struct GridWidget<T> {
-    max_rows: usize,
-    max_columns: usize,
-    min_cell_size: Size,
-    visible_rows: usize,
-    visible_columns: usize,
-    chosen_cell_size: Size,
-    left_corner_point: GridNodePosition,
+    cell_size: f64,
     phantom: PhantomData<T>,
     start_pos: GridNodePosition,
     state: GridState,
@@ -437,18 +436,9 @@ pub struct GridWidget<T> {
 }
 
 impl<T> GridWidget<T> {
-    pub fn new(rows: usize, columns: usize, cell_size: Size) -> Self {
+    pub fn new(cell_size: f64) -> Self {
         GridWidget {
-            max_rows: rows,
-            max_columns: columns,
-            min_cell_size: cell_size,
-            visible_columns: columns,
-            visible_rows: rows,
-            chosen_cell_size: Size {
-                width: 0.0,
-                height: 0.0,
-            },
-            left_corner_point: GridNodePosition { row: 0, col: 0 },
+            cell_size,
             phantom: PhantomData,
             start_pos: GridNodePosition { row: 0, col: 0 },
             state: GridState::Idle,
@@ -458,25 +448,21 @@ impl<T> GridWidget<T> {
     }
 
     fn grid_pos(&self, p: Point) -> Option<GridNodePosition> {
-        let w0 = self.chosen_cell_size.width;
-        let h0 = self.chosen_cell_size.height;
-        if p.x < 0.0 || p.y < 0.0 || w0 == 0.0 || h0 == 0.0 {
+        if p.x < 0.0 || p.y < 0.0 || self.cell_size == 0.0 {
             return None;
         }
-        let col = (p.x / w0) as usize;
-        let row = (p.y / h0) as usize;
-        if col >= self.max_columns || row >= self.max_rows {
-            return None;
-        }
+        let col = (p.x / self.cell_size) as usize;
+        let row = (p.y / self.cell_size) as usize;
+
         Some(GridNodePosition { row, col })
     }
 
     pub fn invalidation_area(&self, pos: GridNodePosition) -> Rect {
         let point = Point {
-            x: self.chosen_cell_size.width * pos.col as f64,
-            y: self.chosen_cell_size.height * pos.row as f64,
+            x: self.cell_size * pos.col as f64,
+            y: self.cell_size * pos.row as f64,
         };
-        Rect::from_origin_size(point, self.chosen_cell_size)
+        Rect::from_origin_size(point, Size {width: self.cell_size, height: self.cell_size })
     }
 }
 
@@ -493,7 +479,7 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                         if cmd.is(SET_DISABLED) {
                             self.state = GridState::Disabled;
                         } else if cmd.is(UPDATE_GRID_PLAYBACK) {
-                            info!("Playback index | {:?} vs {:?} | Stack Length", data.playback_index, data.save_stack.len());
+                            // info!("Playback index | {:?} vs {:?} | Stack Length", data.playback_index, data.save_stack.len());
 
                             let playback_diff = data.playback_index as isize - self.previous_playback_index as isize;
 
@@ -525,9 +511,9 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                                 let option = data.grid.get(pos);
                                 if self.state == GridState::Idle{
                                     if e.button == MouseButton::Left{
-                                        info!("Left Click");
-                                        info!("Start State: {:?}", self.state);
-                                        info!("Start Action: {:?}", data.action);
+                                        // info!("Left Click");
+                                        // info!("Start State: {:?}", self.state);
+                                        // info!("Start Action: {:?}", data.action);
                                         match data.action {
                                             GridAction::Dynamic => {
                                                 self.state = GridState::Running(GridAction::Dynamic);
@@ -555,13 +541,13 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                                         }
 
                                     } else if e.button == MouseButton::Right{
-                                        info!("Right Click");
+                                        // info!("Right Click");
                                         if let GridAction::Dynamic = data.action{
                                             self.state = GridState::Running(data.action);
                                             data.action = GridAction::Remove;
                                         }
                                     } else if e.button == MouseButton::Middle{
-                                        info!("Middle Click");
+                                        // info!("Middle Click");
                                         if let GridAction::Dynamic = data.action{
                                             self.state = GridState::Running(data.action);
                                                 data.action = GridAction::Panning;
@@ -587,8 +573,8 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                                     }
                                 }
                             });
-                        info!("Acquire State: {:?}", self.state);
-                        info!("Acquire Action: {:?}", data.action);
+                        // info!("Acquire State: {:?}", self.state);
+                        // info!("Acquire Action: {:?}", data.action);
                     },
 
                     _ => {},
@@ -646,8 +632,8 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                         } else if e.button == MouseButton::Left {
                             self.state = GridState::Idle;
                         }
-                        info!("Release State: {:?}", self.state);
-                        info!("Release Action: {:?}", data.action);
+                        // info!("Release State: {:?}", self.state);
+                        // info!("Release Action: {:?}", data.action);
                     },
                     _ => {},
                 }
@@ -665,18 +651,18 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
             
             // self.playback_index += change_tracker.len();
 
-            info!("Original: Playback index | {:?} vs {:?} | Stack Length", data.playback_index, data.save_stack.len());
+            // info!("Original: Playback index | {:?} vs {:?} | Stack Length", data.playback_index, data.save_stack.len());
 
             let mut stack_length = data.save_stack.len();
             if data.playback_index != stack_length && stack_length != self.previous_stack_length {
-                info!("Previous Stack | {:?} vs {:?} | Current Stack", self.previous_stack_length, stack_length);
+                // info!("Previous Stack | {:?} vs {:?} | Current Stack", self.previous_stack_length, stack_length);
                 let stack_dif = stack_length - self.previous_stack_length; // Number of elements to stich to the first half of the stack
                 let playback_dif = stack_length - data.playback_index + 1; // Number of elements to delete from the middle
                 let second_half = data.save_stack.slice(stack_length-stack_dif..);
                 data.save_stack.slice(stack_length-playback_dif..);
                 data.save_stack.append(second_half);
                 stack_length = data.save_stack.len();
-                info!("Restich: Playback index | {:?} vs {:?} | Stack Length", data.playback_index, data.save_stack.len());
+                // info!("Restich: Playback index | {:?} vs {:?} | Stack Length", data.playback_index, data.save_stack.len());
             }            
 
             for item in &change_tracker {
@@ -702,15 +688,11 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
 
     fn update(
         &mut self,
-        ctx: &mut UpdateCtx,
-        old_data: &GridWidgetData<T>,
-        data: &GridWidgetData<T>,
+        _ctx: &mut UpdateCtx,
+        _old_data: &GridWidgetData<T>,
+        _data: &GridWidgetData<T>,
         _env: &Env,
     ) {       
-        if data.show_grid_axis != old_data.show_grid_axis {
-            //debug!("Painting the whole window on grid axis change");
-            ctx.request_paint();
-        }
     }
 
     fn layout(
@@ -733,60 +715,20 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
 
     fn paint(&mut self, ctx: &mut PaintCtx, data: &GridWidgetData<T>, _env: &Env) {
         //debug!("Running paint method");
-        //Update cell size
-        let screen_space: Size = ctx.size();
-        //debug!("Screen space: {:?}", ctx.size());
-
-        let width_sized_cell = Size {
-            width: screen_space.width / self.max_columns as f64,
-            height: screen_space.width / self.max_columns as f64,
-        };
-
-        let height_sized_cell = Size {
-            width: screen_space.height / self.max_rows as f64,
-            height: screen_space.height / self.max_rows as f64,
-        };
-
-        self.visible_rows = (screen_space.height / width_sized_cell.height).ceil() as usize;
-        self.visible_columns = (screen_space.width / height_sized_cell.width).ceil() as usize;
-        self.chosen_cell_size = self.min_cell_size;
-
-        if self.visible_rows > self.max_rows || self.visible_columns > self.max_columns {
-            let row_diff = self.visible_rows as i32 - self.max_rows as i32;
-            let col_diff = self.visible_columns as i32 - self.max_columns as i32;
-
-            if row_diff > col_diff {
-                // Calculate minimum cell size to have all columns
-                self.chosen_cell_size = height_sized_cell;
-                self.visible_rows = self.max_rows;
-                self.visible_columns =
-                    (screen_space.width / self.chosen_cell_size.width).ceil() as usize;
-            } else {
-                // Calculate minimum cell size to have all columns
-                self.chosen_cell_size = width_sized_cell;
-                self.visible_rows =
-                    (screen_space.height / self.chosen_cell_size.height).ceil() as usize;
-                self.visible_columns = self.max_columns;
-            }
-        }
-
-        if self.chosen_cell_size.height < self.min_cell_size.height {
-            self.chosen_cell_size = self.min_cell_size;
-        }
-
-        //debug!("Visible rows: {:?}", self.visible_rows);
-        //debug!("Max rows: {:?}", self.max_rows);
-        //debug!("Visible columns: {:?}", self.visible_columns);
-        //debug!("Max column:  {:?}", self.max_columns);
-        //debug!("Chosen cell size: {:?}", self.chosen_cell_size);
-        //debug!("Minimum cell size: {:?}", self.min_cell_size);
-
         // Draw grid cells
+
+        let screen_space = ctx.size();
+        let damage_region  =ctx.region();
+
+        // println!("Canvas Screen Space: {:?}", screen_space);
+        // println!("Canvas Damage Region: {:?}\n", damage_region);
+        let visible_columns = (screen_space.width / self.cell_size).ceil() as usize;
+        let visible_rows =  (screen_space.height / self.cell_size).ceil() as usize;
 
         // Calculate area to render
         let mut paint_rectangles: Vector<Rect> = Vector::new();
 
-        for paint_rect in ctx.region().rects().iter() {
+        for paint_rect in damage_region.rects().iter() {
             paint_rectangles.push_front(*paint_rect);
         }
 
@@ -798,8 +740,8 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
             let to_grid_pos = self
                 .grid_pos(Point::new(paint_rect.max_x(), paint_rect.max_y()))
                 .unwrap_or(GridNodePosition {
-                    col: self.visible_columns - 1,
-                    row: self.visible_rows - 1,
+                    col: visible_columns - 1,
+                    row: visible_rows - 1,
                 });
             let to_row = to_grid_pos.row;
             let to_col = to_grid_pos.col;
@@ -813,10 +755,10 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
             for row in from_row..=to_row {
                 for col in from_col..=to_col {
                     let point = Point {
-                        x: self.chosen_cell_size.width * col as f64,
-                        y: self.chosen_cell_size.height * row as f64,
+                        x: self.cell_size * col as f64,
+                        y: self.cell_size * row as f64,
                     };
-                    let rect = Rect::from_origin_size(point, self.chosen_cell_size);
+                    let rect = Rect::from_origin_size(point, Size {width: self.cell_size, height: self.cell_size});
 
                     let grid_pos = GridNodePosition { row, col };
 
@@ -826,48 +768,62 @@ impl<T:GridRunner + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
                 }
             }
         }
+    }
+}
 
-        let bounding_box = ctx.region().bounding_box();
+////////////////////////////////////////////////////////////////////////////////////////////
+///
+/// CanvasWrapper
+/// 
+////////////////////////////////////////////////////////////////////////////////////////////
 
-        let from_grid_pos: GridNodePosition = self.grid_pos(bounding_box.origin()).unwrap();
-        let from_row = from_grid_pos.row;
-        let from_col = from_grid_pos.col;
+pub struct CanvasWrapper<T, W>{
+    child: WidgetPod<T, W>,
+}
 
-        let to_grid_pos = self
-            .grid_pos(Point::new(bounding_box.max_x(), bounding_box.max_y()))
-            .unwrap_or(GridNodePosition {
-                col: self.visible_columns - 1,
-                row: self.visible_rows - 1,
-            });
-        let to_row = to_grid_pos.row;
-        let to_col = to_grid_pos.col;
+impl<T, W:Widget<T>> CanvasWrapper<T, W> {
+    pub fn new(inner: W) -> Self {
+        CanvasWrapper { child: WidgetPod::new(inner) }
+    }
+}
 
-        // Draw grid axis
+impl<T: Data + PanningData + ZoomData, W: Widget<T>> Widget<T> for CanvasWrapper<T, W> {
+    fn event(&mut self, ctx: &mut druid::EventCtx, event: &Event, data: &mut T, env: &druid::Env) {
+        self.child.event(ctx, event, data, env);
+    }
 
-        if data.show_grid_axis {
-            for row in from_row..=to_row {
-                let from_point = Point {
-                    x: 0.0,
-                    y: self.chosen_cell_size.height * row as f64,
-                };
+    fn lifecycle(&mut self, ctx: &mut druid::LifeCycleCtx, event: &druid::LifeCycle, data: &T, env: &druid::Env) {
+        self.child.lifecycle(ctx, event, data, env);
+    }
 
-                let size = Size::new(ctx.size().width, self.chosen_cell_size.height * 0.05);
-                let rect = Rect::from_origin_size(from_point, size);
-                ctx.fill(rect, &gray::GAINSBORO);
-            }
+    fn update(&mut self, ctx: &mut druid::UpdateCtx, _old_data: &T, data: &T, env: &druid::Env) {
+        self.child.update(ctx, data, env);
+    }
 
-            for col in from_col..=to_col {
-                let from_point = Point {
-                    x: self.chosen_cell_size.width * col as f64,
-                    y: 0.0,
-                };
+    fn layout(&mut self, ctx: &mut druid::LayoutCtx, bc: &druid::BoxConstraints, data: &T, env: &druid::Env) -> Size {
+        let size = self.child.layout(ctx, bc, data, env);
+        self.child.set_origin(ctx, data, env, Point::ORIGIN);
+        size
+    }
 
-                let height = self.visible_rows as f64 * self.chosen_cell_size.height;
+    fn paint(&mut self, ctx: &mut druid::PaintCtx, data: &T, env: &druid::Env) {
+        
+        let mut pos = Point::new(0.0, 0.0);
 
-                let size = Size::new(self.chosen_cell_size.width * 0.05, height);
-                let rect = Rect::from_origin_size(from_point, size);
-                ctx.fill(rect, &gray::GAINSBORO);
-            }
-        }
+        // pos.x += data.get_translation_offset().x;
+        // pos.y += data.get_translation_offset().y;
+
+        ctx.with_save(|ctx| {
+            let translate = Affine::translate(data.get_offset_from_origin().to_vec2());
+            let scale = Affine::scale(data.get_zoom_scale());
+            ctx.transform(translate);
+            ctx.transform(scale);
+            ctx.fill(Circle::new(pos, 100.0), &white::PLATINUM);
+            self.child.paint(ctx, data, env);
+        });
+
+        
+        // println!("Offset: {:?}", data.get_translation_offset());
+        
     }
 }
