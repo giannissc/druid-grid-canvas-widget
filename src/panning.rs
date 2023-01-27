@@ -1,4 +1,5 @@
 use druid::{Point, widget::Controller, Data, Widget, Event, Vec2};
+use log::debug;
 
 pub trait PanningData {
     fn get_offset_from_origin(&self) -> Point;
@@ -56,7 +57,7 @@ impl<T: Data + PanningData, W: Widget<T>> Controller<T, W> for PanningController
                     self.start_mouse_position = Some(mouse_event.window_pos);
                     self.previous_mouse_position = Some(mouse_event.window_pos);
                     self.start_offset = data.get_offset_from_origin();
-                    println!("Start offset: {:?}", self.start_offset);
+                    debug!("Start offset: {:?}", self.start_offset);
                     ctx.set_active(true);
                     ctx.request_focus();
                 }
@@ -85,7 +86,7 @@ impl<T: Data + PanningData, W: Widget<T>> Controller<T, W> for PanningController
 
                     data.set_offset_from_origin(offset);
                     ctx.set_handled();
-                    println!("Current delta: {:?}", data.get_offset_delta());
+                    debug!("Current delta: {:?}", data.get_offset_delta());
                 }
 
             },
@@ -94,8 +95,8 @@ impl<T: Data + PanningData, W: Widget<T>> Controller<T, W> for PanningController
                     ctx.set_active(false);
                     ctx.resign_focus();
                     self.start_mouse_position = None;
-                    println!("Finish offset: {:?}", data.get_offset_from_origin());
-                    println!("Release delta: {:?}\n", release_delta);
+                    debug!("Finish offset: {:?}", data.get_offset_from_origin());
+                    debug!("Release delta: {:?}\n", release_delta);
                 }
             }
             _ => {}

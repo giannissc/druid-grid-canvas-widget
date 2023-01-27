@@ -36,9 +36,6 @@ impl SnappingSystemPainter {
             let damage_region  = ctx.region();
             let invalidation_rect = damage_region.bounding_box();
 
-            // println!("Snapping Screen Space: {:?}", screen_space);
-            // println!("Snapping Damage Region: {:?}", damage_region);
-
             // Background Painting Logic
             let rect = screen_space.to_rect();
             ctx.fill(rect, &env.get(theme::BACKGROUND_DARK));
@@ -88,9 +85,6 @@ impl SnappingSystemPainter {
             let screen_space = ctx.size();
             let damage_region  = ctx.region();
             let invalidation_rect = damage_region.bounding_box();
-
-            println!("Snapping Screen Space: {:?}", screen_space);
-            println!("Snapping Damage Region: {:?}", damage_region);
 
             // Background Painting Logic
             let rect = screen_space.to_rect();
