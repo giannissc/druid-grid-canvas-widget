@@ -2,9 +2,10 @@
 use std::hash::Hash;
 
 use druid::im::HashMap;
+use druid::im::hashmap::{IterMut, Iter};
 use druid::kurbo::Rect;
 use druid::{
-    BoxConstraints, Data, Env, Event, EventCtx, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, Size, UpdateCtx, Widget, WidgetPod, WidgetId, Point, WidgetExt,
+    BoxConstraints, Data, Env, Event, EventCtx, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, Size, UpdateCtx, Widget, WidgetPod, Point,
 };
 
 ///A container that allows for arbitrary layout.
@@ -47,23 +48,39 @@ impl<T: Data> Canvas<T> where
         ctx.children_changed();
     }
 
-    pub fn remove_child(&mut self, ctx: &mut EventCtx, child: impl Positioned<T> + 'static){
+    pub fn remove_child(&mut self, ctx: &mut EventCtx, from: RectInt, ){
+        self.children.remove(&from);
         ctx.children_changed();
     }
 
-    pub fn move_child(&mut self, ctx: &mut EventCtx, child: impl Positioned<T> + 'static){
+    pub fn move_child(&mut self, ctx: &mut EventCtx, from: RectInt, to: RectInt){
+        let child_from = self.children.remove(&from);
+        if let Some(child_from) = child_from {
+            self.children.insert(to, child_from);
+        }
         ctx.children_changed();
     }
 
-    pub fn exchange_child(&mut self, ctx: &mut EventCtx, child: impl Positioned<T> + 'static){
+    pub fn exchange_child(&mut self, ctx: &mut EventCtx, from: RectInt, to: RectInt){
+        let child_from = self.children.remove(&from);
+        let child_to = self.children.remove(&to);
+        if let (Some(child_from), Some(child_to)) = (child_from, child_to) {
+            self.children.insert(to, child_from);
+            self.children.insert(from, child_to);
+        }
+
         ctx.children_changed();
     }
 
-    pub fn children_mut(&mut self, ctx: &mut EventCtx, child: impl Positioned<T> + 'static){
+    pub fn children_mut(&mut self, ctx: &mut EventCtx) -> IterMut<RectInt, Box<dyn Positioned<T>>> {
         ctx.children_changed();
+        self.children.iter_mut()
     }
     
-    pub fn children(&self){}
+    pub fn children(&self) -> Iter<RectInt, Box<dyn Positioned<T>>>{
+        self.children.iter()
+    }
+
 }
 
 impl<T: Data> Widget<T> for Canvas<T> where
@@ -91,7 +108,7 @@ impl<T: Data> Widget<T> for Canvas<T> where
 
     fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &T, env: &Env) -> Size {
         let mut temp = HashMap::new();
-        for (rect, child) in self.children.iter_mut() {
+        for (_, child) in self.children.iter_mut() {
             let (origin, size) = child.positioned_layout(ctx, data, env);
             let origin: PointInt = origin.into();
             let size: SizeInt = size.into();
@@ -193,7 +210,7 @@ pub trait Positioned<T: Data>: Widget<T> {
 /// 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 #[derive(Debug, PartialEq, Hash, Eq, Clone)]
-struct RectInt {
+pub struct RectInt {
     position: PointInt,
     size: SizeInt,
 }
@@ -215,7 +232,7 @@ impl RectInt {
 }
 
 #[derive(Debug, PartialEq, Hash, Eq, Clone)]
-struct PointInt {
+pub struct PointInt {
     /// The x coordinate.
     pub x: i32,
     /// The y coordinate.
@@ -254,7 +271,7 @@ impl Into<Point> for PointInt {
 }
 
 #[derive(Debug, PartialEq, Hash, Eq, Clone)]
-struct SizeInt {
+pub struct SizeInt {
     /// The width.
     pub width: u32,
     /// The height.
