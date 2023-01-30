@@ -7,8 +7,8 @@ use druid_color_thesaurus::*;
 
 use druid_grid_graph_widget::panning::{PanningData, PanningController};
 use druid_grid_graph_widget::zooming::{ZoomData, ZoomController};
-use druid_grid_graph_widget::{GridWidgetData, GridWidget, GridRunner, StackItem, GridNodePosition, UPDATE_GRID_PLAYBACK, CanvasWrapper};
-use druid_grid_graph_widget::snapping::{SnappingSystem, SnappingSystemPainter};
+use druid_grid_graph_widget::{GridWidgetData, GridWidget, GridItem, StackItem, GridNodePosition, UPDATE_GRID_PLAYBACK, CanvasWrapper};
+use druid_grid_graph_widget::snapping::{GridSnappingSystem, GridSnappingSystemPainter};
 //////////////////////////////////////////////////////////////////////////////////////
 // Constants
 //////////////////////////////////////////////////////////////////////////////////////
@@ -50,7 +50,7 @@ impl GridNodeType<Net> {
     }
 }
 
-impl GridRunner for GridNodeType<Net> {
+impl GridItem for GridNodeType<Net> {
 
     fn get_color(&self) -> &Color {
         match self{
@@ -108,7 +108,7 @@ impl AppData {
     }
 }
 
-impl SnappingSystem for AppData {
+impl GridSnappingSystem for AppData {
     fn get_cell_size(&self) -> f64 {
         self.cell_size
     }
@@ -117,11 +117,11 @@ impl SnappingSystem for AppData {
         self.cell_size = size;
     }
 
-    fn get_grid_axis_state(&self) -> bool {
+    fn get_grid_visibility(&self) -> bool {
         self.grid_axis_state
     }
 
-    fn set_grid_axis_state(&mut self, state: bool) {
+    fn set_grid_visibility(&mut self, state: bool) {
         self.grid_axis_state = state;
     }
 
@@ -129,19 +129,19 @@ impl SnappingSystem for AppData {
 }
 
 impl PanningData for AppData {
-    fn get_offset_from_origin(&self) -> Point {
+    fn get_absolute_offset(&self) -> Point {
         self.offset_origin
     }
 
-    fn set_offset_from_origin(&mut self, offset: Point) {
+    fn set_absolute_offset(&mut self, offset: Point) {
         self.offset_origin = offset
     }
 
-    fn get_offset_delta(&self) -> druid::Vec2 {
+    fn get_relative_offset(&self) -> druid::Vec2 {
         self.offset_delta
     }
 
-    fn set_offset_delta(&mut self, delta: druid::Vec2) {
+    fn set_relative_offset(&mut self, delta: druid::Vec2) {
         self.offset_delta = delta
     }
 }
@@ -203,12 +203,12 @@ fn main() {
 fn make_ui() -> impl Widget<AppData>{
     let cell_size = 50.0;
 
-    let snapping =  SnappingSystemPainter;
+    let snapping =  GridSnappingSystemPainter::default();
     let grid = GridWidget::new(cell_size)
     .with_id(GRID_ID)
     .lens(AppData::grid_data);
 
-    let panning_grid = CanvasWrapper::new(grid).background(snapping.dot_grid());
+    let panning_grid = CanvasWrapper::new(grid).background(snapping.square_grid());
 
     let panning_controller = ControllerHost::new(panning_grid, PanningController::default());
     let zoom_controller = ControllerHost::new(panning_controller, ZoomController::default());
@@ -259,7 +259,7 @@ fn make_grid_options() -> impl Widget<AppData>{
             Flex::row()
                 .with_child(Label::new("Net: "))
                 .with_child(Label::new(|data: &AppData, _: &_| {
-                    format!("{:.1}", data.grid_data.node_type.get_net())
+                    format!("{:.1}", data.grid_data.grid_item.get_net())
                 }))
                 .main_axis_alignment(MainAxisAlignment::SpaceBetween)
                 .cross_axis_alignment(CrossAxisAlignment::Start)
