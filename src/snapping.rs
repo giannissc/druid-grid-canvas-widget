@@ -6,12 +6,12 @@ use druid_color_thesaurus::gray;
 use crate::panning::PanningData;
 use crate::zooming::ZoomData;
 
-pub trait SnappingSystem: PanningData + ZoomData {
+pub trait GridSnappingSystem: PanningData + ZoomData {
     fn get_cell_size(&self) -> f64;
     fn set_cell_size(&mut self, size: f64);
-    fn get_grid_axis_state(&self) -> bool;
-    fn set_grid_axis_state(&mut self, state: bool);
-    fn get_snap_position(&self, desired_position: Point) -> Point {
+    fn get_grid_visibility(&self) -> bool;
+    fn set_grid_visibility(&mut self, state: bool);
+    fn move_to_grid_position(&self, desired_position: Point) -> Point {
 
         let scaled_cell_size = self.get_cell_size() * self.get_zoom_scale();
 
@@ -20,14 +20,48 @@ pub trait SnappingSystem: PanningData + ZoomData {
             y: (desired_position.y / scaled_cell_size).floor() * scaled_cell_size, 
         }
     }
+
+    fn get_grid_index(&self, position: Point) -> (isize, isize) {
+
+        let scaled_cell_size = self.get_cell_size() * self.get_zoom_scale();
+
+        let row = (position.y / scaled_cell_size).floor() as isize;
+        let col = (position.x / scaled_cell_size).floor() as isize;
+
+        (row, col)
+    }
+
+    fn get_grid_position(&self, row: isize, col:isize) -> Point {
+        let scaled_cell_size = self.get_cell_size() * self.get_zoom_scale();
+
+        Point { 
+            x: col as f64 * scaled_cell_size, 
+            y: row as f64 * scaled_cell_size, 
+        }
+    }
 }
 
 #[derive(Copy, Clone)]
-pub struct SnappingSystemPainter;
+pub struct GridSnappingSystemPainter{
+    show_origin: bool,
+    debug_offset: bool,
+}
 
-impl SnappingSystemPainter {
-    pub fn square_grid<T: Data + SnappingSystem>(&self) -> Painter<T> {
-        Painter::new(|ctx, data: &T, env| {
+impl Default for GridSnappingSystemPainter {
+    fn default() -> Self {
+        Self { 
+            show_origin: true, 
+            debug_offset: true,
+        }
+    }
+}
+
+impl GridSnappingSystemPainter {
+    pub fn square_grid<T: Data + GridSnappingSystem>(&self) -> Painter<T> {
+        let origin_visibility = self.show_origin;
+        let debug_visibility = self.debug_offset;
+
+        Painter::new(move |ctx, data: &T, env| {
             let scaled_cell_size = data.get_cell_size() * data.get_zoom_scale();
             let line_width = scaled_cell_size * 0.05;
             
@@ -41,10 +75,10 @@ impl SnappingSystemPainter {
             ctx.fill(rect, &env.get(theme::BACKGROUND_DARK));
 
             // Axes Painting Logic
-            if data.get_grid_axis_state() {
+            if data.get_grid_visibility() {
 
-                let start_point = data.get_snap_position(invalidation_rect.origin());
-                let end_point = data.get_snap_position(Point {
+                let start_point = data.move_to_grid_position(invalidation_rect.origin());
+                let end_point = data.move_to_grid_position(Point {
                     x: invalidation_rect.max_x(),
                     y: invalidation_rect.max_y(),
                 });
@@ -58,7 +92,7 @@ impl SnappingSystemPainter {
                 for row in from_row..= to_row {
                     let mut from_point = Point::new(0.0, scaled_cell_size * row as f64 - line_width / 2.0 );
                     // Integrate translation data to line rendering
-                    from_point.y += data.get_offset_from_origin().y % scaled_cell_size;
+                    from_point.y += data.get_absolute_offset().y % scaled_cell_size;
                     let size = Size::new(ctx.size().width, line_width);
                     let rect = Rect::from_origin_size(from_point, size);
                     ctx.fill(rect, &gray::GAINSBORO)
@@ -67,17 +101,33 @@ impl SnappingSystemPainter {
                 for col in from_col..=to_col {
                     let mut from_point = Point::new(scaled_cell_size * col as f64 - line_width / 2.0, 0.0);
                     // Integrate translation data to line rendering
-                    from_point.x += data.get_offset_from_origin().x % scaled_cell_size;
+                    from_point.x += data.get_absolute_offset().x % scaled_cell_size;
                     let size = Size::new(line_width, ctx.size().width);
                     let rect = Rect::from_origin_size(from_point, size);
                     ctx.fill(rect, &gray::GAINSBORO)
                 }
             }
+
+            if origin_visibility {
+                let center = Point::new(data.get_absolute_offset().x,data.get_absolute_offset().y);
+                let circle = Circle::new(center, 5.0);
+                ctx.fill(circle, &druid_color_thesaurus::red::CARMINE);
+            }
+
+            if debug_visibility {
+                let center = Point::new(data.get_absolute_offset().x % scaled_cell_size,data.get_absolute_offset().y % scaled_cell_size);
+                let circle = Circle::new(center, 5.0);
+                ctx.fill(circle, &druid_color_thesaurus::pink::CORAL_PINK);
+
+            }
         })
     }
 
-    pub fn dot_grid<T: Data + SnappingSystem>(&self) -> Painter<T> {
-        Painter::new(|ctx, data: &T, env| {
+    pub fn dot_grid<T: Data + GridSnappingSystem>(&self) -> Painter<T> {
+        let origin_visibility = self.show_origin;
+        let debug_visibility = self.debug_offset;
+
+        Painter::new(move |ctx, data: &T, env| {
             let scaled_cell_size = data.get_cell_size() * data.get_zoom_scale();
             let line_width = scaled_cell_size * 0.05;
             
@@ -90,9 +140,9 @@ impl SnappingSystemPainter {
             let rect = screen_space.to_rect();
             ctx.fill(rect, &env.get(theme::BACKGROUND_DARK));
 
-            if data.get_grid_axis_state() {
-                let start_point = data.get_snap_position(invalidation_rect.origin());
-                let end_point = data.get_snap_position(Point {
+            if data.get_grid_visibility() {
+                let start_point = data.move_to_grid_position(invalidation_rect.origin());
+                let end_point = data.move_to_grid_position(Point {
                     x: invalidation_rect.max_x(),
                     y: invalidation_rect.max_y(),
                 });
@@ -110,14 +160,27 @@ impl SnappingSystemPainter {
                             scaled_cell_size * row as f64, 
                         );
 
-                        // 
-                        center.x += data.get_offset_from_origin().x % scaled_cell_size;
-                        center.y += data.get_offset_from_origin().y % scaled_cell_size;
+                        // Zoom UI functionality
+                        center.x += data.get_absolute_offset().x % scaled_cell_size;
+                        center.y += data.get_absolute_offset().y % scaled_cell_size;
 
                         let circle = Circle::new(center, line_width);
                         ctx.fill(circle, &env.get(theme::BORDER_LIGHT));
                     }
                 }
+            }
+
+            if origin_visibility {
+                let center = Point::new(data.get_absolute_offset().x,data.get_absolute_offset().y);
+                let circle = Circle::new(center, 5.0);
+                ctx.fill(circle, &druid_color_thesaurus::red::CARMINE);
+            }
+
+            if debug_visibility {
+                let center = Point::new(data.get_absolute_offset().x % scaled_cell_size,data.get_absolute_offset().y % scaled_cell_size);
+                let circle = Circle::new(center, 5.0);
+                ctx.fill(circle, &druid_color_thesaurus::pink::CORAL_PINK);
+
             }
         })
     }
