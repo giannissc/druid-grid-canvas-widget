@@ -236,16 +236,12 @@ fn make_grid_options() -> impl Widget<AppData>{
             Flex::row()
                 .with_child(Label::new("Playback: "))
                 .with_child(Button::new("Next").lens(AppData::grid_data).on_click(|ctx, data, _env|{
-                    if data.grid_data.playback_index != data.grid_data.get_stack_length() {
-                        data.grid_data.playback_index += 1;
-                        ctx.submit_command(Command::new(UPDATE_GRID_PLAYBACK, (), Target::Widget(GRID_ID)));
-                    }
+                    data.grid_data.save_system.redo();
+                    ctx.submit_command(Command::new(UPDATE_GRID_PLAYBACK, (), Target::Widget(GRID_ID)));
                 }))
                 .with_child(Button::new("Previous").lens(AppData::grid_data).on_click(|ctx, data, _env|{
-                    if data.grid_data.playback_index != 0 {
-                        data.grid_data.playback_index -= 1;
-                        ctx.submit_command(Command::new(UPDATE_GRID_PLAYBACK, (), Target::Widget(GRID_ID)));
-                    }
+                    data.grid_data.save_system.undo();
+                    ctx.submit_command(Command::new(UPDATE_GRID_PLAYBACK, (), Target::Widget(GRID_ID)));
                 }))
         )
         .with_child(
