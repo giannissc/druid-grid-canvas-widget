@@ -2,10 +2,10 @@ use druid::{Point, widget::Controller, Data, Widget, Event, Vec2};
 use log::debug;
 
 pub trait PanningData {
-    fn get_offset_from_origin(&self) -> Point;
-    fn set_offset_from_origin(&mut self, offset: Point);
-    fn get_offset_delta(&self) -> Vec2;
-    fn set_offset_delta(&mut self, delta: Vec2);
+    fn get_absolute_offset(&self) -> Point;
+    fn set_absolute_offset(&mut self, offset: Point);
+    fn get_relative_offset(&self) -> Vec2;
+    fn set_relative_offset(&mut self, delta: Vec2);
 }
 
 pub struct PanningController{
@@ -56,7 +56,7 @@ impl<T: Data + PanningData, W: Widget<T>> Controller<T, W> for PanningController
                 if mouse_event.button.is_middle() {
                     self.start_mouse_position = Some(mouse_event.window_pos);
                     self.previous_mouse_position = Some(mouse_event.window_pos);
-                    self.start_offset = data.get_offset_from_origin();
+                    self.start_offset = data.get_absolute_offset();
                     debug!("Start offset: {:?}", self.start_offset);
                     ctx.set_active(true);
                     ctx.request_focus();
@@ -67,7 +67,7 @@ impl<T: Data + PanningData, W: Widget<T>> Controller<T, W> for PanningController
                 if let (Some(start_mouse_position), Some(previous_mouse_position)) = (self.start_mouse_position, self.previous_mouse_position) {
                     // Calculate delta from current position
                     release_delta = mouse_event.window_pos - start_mouse_position;
-                    data.set_offset_delta(mouse_event.window_pos - previous_mouse_position);
+                    data.set_relative_offset(mouse_event.window_pos - previous_mouse_position);
                     let mut offset = self.start_offset + release_delta;
 
                     self.previous_mouse_position = Some(mouse_event.window_pos);
@@ -84,9 +84,9 @@ impl<T: Data + PanningData, W: Widget<T>> Controller<T, W> for PanningController
                         offset.y = self.min_offset.y;
                     }
 
-                    data.set_offset_from_origin(offset);
+                    data.set_absolute_offset(offset);
                     ctx.set_handled();
-                    debug!("Current delta: {:?}", data.get_offset_delta());
+                    debug!("Current delta: {:?}", data.get_relative_offset());
                 }
 
             },
@@ -95,7 +95,7 @@ impl<T: Data + PanningData, W: Widget<T>> Controller<T, W> for PanningController
                     ctx.set_active(false);
                     ctx.resign_focus();
                     self.start_mouse_position = None;
-                    debug!("Finish offset: {:?}", data.get_offset_from_origin());
+                    debug!("Finish offset: {:?}", data.get_absolute_offset());
                     debug!("Release delta: {:?}\n", release_delta);
                 }
             }
