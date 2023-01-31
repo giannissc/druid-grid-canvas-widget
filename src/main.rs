@@ -7,7 +7,7 @@ use druid_color_thesaurus::*;
 
 use druid_grid_graph_widget::panning::{PanningData, PanningController};
 use druid_grid_graph_widget::zooming::{ZoomData, ZoomController};
-use druid_grid_graph_widget::{GridWidgetData, GridWidget, GridItem, StackItem, GridNodePosition, UPDATE_GRID_PLAYBACK, CanvasWrapper};
+use druid_grid_graph_widget::{GridWidgetData, GridWidget, GridItem, StackItem, GridIndex, UPDATE_GRID_PLAYBACK, CanvasWrapper};
 use druid_grid_graph_widget::snapping::{GridSnappingSystem, GridSnappingSystemPainter};
 //////////////////////////////////////////////////////////////////////////////////////
 // Constants
@@ -180,11 +180,11 @@ fn main() {
     };
 
     let mut pattern = Vector::new();
-    pattern.push_back(StackItem::Add(GridNodePosition{row:0, col:0}, GridNodeType::Wall(1), None));
-    pattern.push_back(StackItem::Add(GridNodePosition{row:0, col:1}, GridNodeType::Wall(1), None));
-    pattern.push_back(StackItem::Add(GridNodePosition{row:0, col:2}, GridNodeType::Wall(1), None));
-    pattern.push_back(StackItem::Add(GridNodePosition{row:1, col:0}, GridNodeType::Wall(1), None));
-    pattern.push_back(StackItem::Add(GridNodePosition{row:2, col:0}, GridNodeType::Wall(1), None));
+    pattern.push_back(StackItem::Add(GridIndex{row:0, col:0}, GridNodeType::Wall(1), None));
+    pattern.push_back(StackItem::Add(GridIndex{row:0, col:1}, GridNodeType::Wall(1), None));
+    pattern.push_back(StackItem::Add(GridIndex{row:0, col:2}, GridNodeType::Wall(1), None));
+    pattern.push_back(StackItem::Add(GridIndex{row:1, col:0}, GridNodeType::Wall(1), None));
+    pattern.push_back(StackItem::Add(GridIndex{row:2, col:0}, GridNodeType::Wall(1), None));
     data.grid_data.submit_to_stack(pattern);
 
     AppLauncher::with_window(main_window)
