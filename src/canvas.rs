@@ -1,12 +1,11 @@
 //! A widget that allows for arbitrary layout of it's children.
+use std::borrow::{BorrowMut, Borrow};
 use std::hash::Hash;
 
 use druid::im::HashMap;
-use druid::im::hashmap::{IterMut, Iter};
 use druid::kurbo::Rect;
 use druid::{
-    BoxConstraints, Data, Env, Event, EventCtx, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, Size, UpdateCtx, Widget, WidgetPod, Point,
-};
+    BoxConstraints, Data, Env, Event, EventCtx, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, Size, UpdateCtx, Widget, WidgetPod, Point, WidgetId,};
 
 ///A container that allows for arbitrary layout.
 ///
@@ -16,106 +15,123 @@ use druid::{
 ///
 ///[`CanvasLayout`]: trait.CanvasLayout.html
 ///[`CanvasWrap`]: struct.CanvasWrap.html
-pub struct Canvas<T: Data> where
-(dyn Positioned<T> + 'static): Clone
+pub struct Canvas<T>
 {
-    children: HashMap<RectInt, Box<dyn Positioned<T>>>,
+    children: Vec<Box<dyn Positioned<T>>>,
+    position_map: HashMap<RectInt, usize>,
+    id_map: HashMap<WidgetId, usize>,
+    
 }
 
-impl<T: Data> Default for Canvas<T> where
-(dyn Positioned<T> + 'static): Clone 
+
+impl<T: Data> Default for Canvas<T>
 {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T: Data> Canvas<T> where
-(dyn Positioned<T> + 'static): Clone
+impl<T: Data> Canvas<T>
 {
     pub fn new() -> Self {
         Self {
-            children: HashMap::new(),
+            children: vec![],
+            position_map: HashMap::new(),
+            id_map: HashMap::new(),
         }
     }
-    pub fn with_child(mut self, child: impl Positioned<T> + 'static) -> Self {
-        self.children.insert(RectInt::ZERO, Box::new(child));
-        self
-    }
 
-    pub fn add_child(&mut self, ctx: &mut EventCtx, child: impl Positioned<T> + 'static) {
-        self.children.insert(RectInt::ZERO, Box::new(child));
+    pub fn add_child(&mut self, ctx: &mut EventCtx, inner: impl Positioned<T> + 'static, to: RectInt) where
+    dyn Positioned<T> : Widget<T> {
+        let index = self.position_map.remove(&to);
+        
+        if let Some(index) = index {
+            self.children.remove(index);
+        }
+
+        let index = self.children.len();
+        self.children.insert(index, Box::new(inner));
+        self.position_map.insert(to, index);
         ctx.children_changed();
     }
 
-    pub fn remove_child(&mut self, ctx: &mut EventCtx, from: RectInt, ){
-        self.children.remove(&from);
-        ctx.children_changed();
+    pub fn remove_child(&mut self, ctx: &mut EventCtx, from: RectInt){
+        let index = self.position_map.remove(&from);
+        if let Some(index) = index {
+            self.children.remove(index);
+            ctx.children_changed();
+        }
     }
 
     pub fn move_child(&mut self, ctx: &mut EventCtx, from: RectInt, to: RectInt){
-        let child_from = self.children.remove(&from);
-        if let Some(child_from) = child_from {
-            self.children.insert(to, child_from);
+        let index_from = self.position_map.remove(&from);
+        let index_to = self.position_map.remove(&to);
+        
+        if let Some(index) = index_to {
+            self.children.remove(index);
+        }
+
+        if let Some(index) = index_from {
+            self.position_map.insert(to, index);
         }
         ctx.children_changed();
     }
 
     pub fn exchange_child(&mut self, ctx: &mut EventCtx, from: RectInt, to: RectInt){
-        let child_from = self.children.remove(&from);
-        let child_to = self.children.remove(&to);
-        if let (Some(child_from), Some(child_to)) = (child_from, child_to) {
-            self.children.insert(to, child_from);
-            self.children.insert(from, child_to);
+        let index_from = self.position_map.remove(&from);
+        let index_to = self.position_map.remove(&to);
+        if let (Some(index_from), Some(index_to)) = (index_from, index_to) {
+            self.position_map.insert(to, index_from);
+            self.position_map.insert(from, index_to);
         }
 
         ctx.children_changed();
     }
 
-    pub fn children_mut(&mut self, ctx: &mut EventCtx) -> IterMut<RectInt, Box<dyn Positioned<T>>> {
+    pub fn children_mut(&mut self, ctx: &mut EventCtx) -> &mut Vec<Box<dyn Positioned<T>>> {
         ctx.children_changed();
-        self.children.iter_mut()
+        self.children.borrow_mut()
     }
     
-    pub fn children(&self) -> Iter<RectInt, Box<dyn Positioned<T>>>{
-        self.children.iter()
+    pub fn children(&self) -> &Vec<Box<dyn Positioned<T>>> {
+        self.children.borrow()
     }
 
 }
 
-impl<T: Data> Widget<T> for Canvas<T> where
-(dyn Positioned<T> + 'static): Clone
+impl<T: Data> Widget<T> for Canvas<T>
 {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut T, env: &Env) {
         //we're letting their own filtering handle event filtering
         //we may want to revisit that decision
-        for (_, child) in self.children.iter_mut() {
+        for child in self.children.iter_mut() {
             child.event(ctx, event, data, env);
         }
     }
 
     fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, data: &T, env: &Env) {
-        for (_, child) in self.children.iter_mut() {
+        for child in self.children.iter_mut() {
             child.lifecycle(ctx, event, data, env);
         }
     }
 
     fn update(&mut self, ctx: &mut UpdateCtx, old_data: &T, data: &T, env: &Env) {
-        for (_, child) in self.children.iter_mut() {
+        for child in self.children.iter_mut() {
             child.update(ctx, old_data, data, env);
         }
     }
 
     fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &T, env: &Env) -> Size {
         let mut temp = HashMap::new();
-        for (_, child) in self.children.iter_mut() {
+
+        for (index, child) in self.children.iter_mut().enumerate() {
             let (origin, size) = child.positioned_layout(ctx, data, env);
             let origin: PointInt = origin.into();
             let size: SizeInt = size.into();
-            temp.insert(RectInt::new(origin, size), child.clone());
+            temp.insert(RectInt::new(origin, size), index);
         }
 
-        self.children = temp;
+        self.position_map = temp;
 
         //We always take the max size.
         let size = bc.max();
@@ -131,7 +147,7 @@ impl<T: Data> Widget<T> for Canvas<T> where
     fn paint(&mut self, ctx: &mut PaintCtx, data: &T, env: &Env) {
         //TODO: filter painting based on our extents? (don't draw widgets entirely outside our bounds?)
         //It's the main reason we keep and update the rect
-        for (_, child) in self.children.iter_mut() {
+        for child in self.children.iter_mut() {
             child.paint(ctx, data, env);
         }
     }
@@ -200,7 +216,7 @@ impl<W: Widget<T>, T: Data, F: Fn(&T) -> Point> Widget<T> for CanvasChildWrap<W,
 }
 
 ///
-pub trait Positioned<T: Data>: Widget<T> {
+pub trait Positioned<T>: Widget<T> {
     fn positioned_layout(&mut self, ctx: &mut LayoutCtx, data: &T, env: &Env) -> (Point, Size);
 }
 
