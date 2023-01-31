@@ -12,21 +12,20 @@ pub trait GridSnappingSystem: PanningData + ZoomData {
     fn get_grid_visibility(&self) -> bool;
     fn set_grid_visibility(&mut self, state: bool);
     fn move_to_grid_position(&self, desired_position: Point) -> Point {
-
-        let scaled_cell_size = self.get_cell_size() * self.get_zoom_scale();
-
-        Point { 
-            x: (desired_position.x / scaled_cell_size).floor() * scaled_cell_size, 
-            y: (desired_position.y / scaled_cell_size).floor() * scaled_cell_size, 
-        }
+        let (row, col) = self.get_grid_index(desired_position);
+        self.get_grid_position(row, col)
     }
 
     fn get_grid_index(&self, position: Point) -> (isize, isize) {
+        // Normalise translation offset
+        let mut position_norm = position; 
+        position_norm.x -= self.get_absolute_offset().x;
+        position_norm.y -= self.get_absolute_offset().y;
 
         let scaled_cell_size = self.get_cell_size() * self.get_zoom_scale();
 
-        let row = (position.y / scaled_cell_size).floor() as isize;
-        let col = (position.x / scaled_cell_size).floor() as isize;
+        let row = (position_norm.y / scaled_cell_size).floor() as isize;
+        let col = (position_norm.x / scaled_cell_size).floor() as isize;
 
         (row, col)
     }
@@ -35,8 +34,8 @@ pub trait GridSnappingSystem: PanningData + ZoomData {
         let scaled_cell_size = self.get_cell_size() * self.get_zoom_scale();
 
         Point { 
-            x: col as f64 * scaled_cell_size, 
-            y: row as f64 * scaled_cell_size, 
+            x: col as f64 * scaled_cell_size + self.get_absolute_offset().x, 
+            y: row as f64 * scaled_cell_size + self.get_absolute_offset().y, 
         }
     }
 }
