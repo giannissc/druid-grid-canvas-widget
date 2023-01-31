@@ -7,7 +7,7 @@ use druid_color_thesaurus::*;
 
 use druid_grid_graph_widget::panning::{PanningData, PanningController};
 use druid_grid_graph_widget::zooming::{ZoomData, ZoomController};
-use druid_grid_graph_widget::{GridWidgetData, GridWidget, GridItem, StackItem, GridIndex, UPDATE_GRID_PLAYBACK, CanvasWrapper};
+use druid_grid_graph_widget::{GridWidgetData, GridCanvas, GridItem, StackItem, GridIndex, UPDATE_GRID_PLAYBACK, CanvasWrapper};
 use druid_grid_graph_widget::snapping::{GridSnappingSystem, GridSnappingSystemPainter};
 //////////////////////////////////////////////////////////////////////////////////////
 // Constants
@@ -204,7 +204,7 @@ fn make_ui() -> impl Widget<AppData>{
     let cell_size = 50.0;
 
     let snapping =  GridSnappingSystemPainter::default();
-    let grid = GridWidget::new(cell_size)
+    let grid = GridCanvas::new(cell_size)
     .with_id(GRID_ID)
     .lens(AppData::grid_data);
 

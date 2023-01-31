@@ -424,7 +424,7 @@ impl<T:GridItem + PartialEq> GridWidgetData<T>{
 // TODO: Translate event position to correct location based on scaling/translation offset
 
 #[derive(Clone, PartialEq, Data, Lens)]
-pub struct GridWidget<T> {
+pub struct GridCanvas<T> {
     cell_size: f64,
     phantom: PhantomData<T>,
     start_pos: GridIndex,
@@ -433,9 +433,9 @@ pub struct GridWidget<T> {
     previous_playback_index: usize,
 }
 
-impl<T> GridWidget<T> {
+impl<T> GridCanvas<T> {
     pub fn new(cell_size: f64) -> Self {
-        GridWidget {
+        GridCanvas {
             cell_size,
             phantom: PhantomData,
             start_pos: GridIndex { row: 0, col: 0 },
@@ -464,7 +464,7 @@ impl<T> GridWidget<T> {
     }
 }
 
-impl<T:GridItem + PartialEq> Widget<GridWidgetData<T>> for GridWidget<T>{
+impl<T:GridItem + PartialEq> Widget<GridWidgetData<T>> for GridCanvas<T>{
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut GridWidgetData<T>, _env: &Env) {
         
         let mut change_tracker: HashSet<StackItem<T>> = HashSet::new();
