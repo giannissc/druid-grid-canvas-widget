@@ -1,14 +1,14 @@
 use druid::im::Vector;
-use druid::{theme, AppLauncher, Color, LocalizedString, WindowDesc, Data, Lens, Widget, WidgetExt, WidgetId, Command, Target, Point, Vec2,};
+use druid::{theme, AppLauncher, Color, LocalizedString, WindowDesc, Data, Lens, Widget, WidgetExt, WidgetId, Command, Target, Point, };
 
 use druid::widget::{Flex, Label, MainAxisAlignment, CrossAxisAlignment, Switch, Button, ControllerHost,};
 
 use druid_color_thesaurus::*;
 
-use druid_grid_graph_widget::panning::{PanningData, PanningController};
-use druid_grid_graph_widget::zooming::{ZoomData, ZoomController};
-use druid_grid_graph_widget::{GridWidgetData, GridCanvas, GridItem, StackItem, GridIndex, UPDATE_GRID_PLAYBACK, CanvasWrapper};
-use druid_grid_graph_widget::snapping::{GridSnappingSystem, GridSnappingSystemPainter};
+use druid_grid_graph_widget::panning::{PanningController, PanningData};
+use druid_grid_graph_widget::zooming::{ZoomController, ZoomData};
+use druid_grid_graph_widget::{GridCanvasData, GridCanvas, GridItem, StackItem, GridIndex, UPDATE_GRID_PLAYBACK};
+use druid_grid_graph_widget::snapping::{GridSnappingSystemPainter};
 //////////////////////////////////////////////////////////////////////////////////////
 // Constants
 //////////////////////////////////////////////////////////////////////////////////////
@@ -93,13 +93,8 @@ impl GridItem for GridNodeType<Net> {
 pub struct AppData{
     pub is_paused: bool,
     pub is_running: bool,
-    pub grid_data: GridWidgetData<GridNodeType<Net>>,
+    pub grid_data: GridCanvasData<GridNodeType<Net>>,
     pub updates_per_second: f64,
-    pub cell_size: f64,
-    pub grid_axis_state: bool,
-    pub offset_origin: Point,
-    pub offset_delta: Vec2,
-    pub zoom_scale: f64,
 }
 
 impl AppData {
@@ -108,51 +103,31 @@ impl AppData {
     }
 }
 
-impl GridSnappingSystem for AppData {
-    fn get_cell_size(&self) -> f64 {
-        self.cell_size
-    }
-
-    fn set_cell_size(&mut self, size: f64) {
-        self.cell_size = size;
-    }
-
-    fn get_grid_visibility(&self) -> bool {
-        self.grid_axis_state
-    }
-
-    fn set_grid_visibility(&mut self, state: bool) {
-        self.grid_axis_state = state;
-    }
-
-    
-}
-
 impl PanningData for AppData {
     fn get_absolute_offset(&self) -> Point {
-        self.offset_origin
+        self.grid_data.offset_absolute
     }
 
     fn set_absolute_offset(&mut self, offset: Point) {
-        self.offset_origin = offset
+        self.grid_data.offset_absolute = offset
     }
 
     fn get_relative_offset(&self) -> druid::Vec2 {
-        self.offset_delta
+        self.grid_data.offset_relative
     }
 
     fn set_relative_offset(&mut self, delta: druid::Vec2) {
-        self.offset_delta = delta
+        self.grid_data.offset_relative = delta
     }
 }
 
 impl ZoomData for AppData {
     fn get_zoom_scale(&self) -> f64 {
-        self.zoom_scale
+        self.grid_data.zoom_scale
     }
 
     fn set_zoom_scale(&mut self, scale: f64) {
-        self.zoom_scale = scale;
+        self.grid_data.zoom_scale = scale;
     }
 }
 
@@ -170,13 +145,8 @@ fn main() {
     let mut data = AppData {
         is_paused: false,
         is_running: false,
-        grid_data: GridWidgetData::new(GridNodeType::Wall(1)),
+        grid_data: GridCanvasData::new(GridNodeType::Wall(1)),
         updates_per_second: 10.0,
-        cell_size: 50.0,
-        grid_axis_state: true,
-        offset_origin: Point::new(0.0, 0.0),
-        offset_delta: Vec2::new(0.0, 0.0),
-        zoom_scale: 1.0,
     };
 
     let mut pattern = Vector::new();
@@ -204,13 +174,11 @@ fn make_ui() -> impl Widget<AppData>{
     let cell_size = 50.0;
 
     let snapping =  GridSnappingSystemPainter::default();
-    let grid = GridCanvas::new(cell_size)
+    let grid = GridCanvas::new(cell_size).background(snapping.square_grid())
     .with_id(GRID_ID)
     .lens(AppData::grid_data);
 
-    let panning_grid = CanvasWrapper::new(grid).background(snapping.square_grid());
-
-    let panning_controller = ControllerHost::new(panning_grid, PanningController::default());
+    let panning_controller = ControllerHost::new(grid, PanningController::default());
     let zoom_controller = ControllerHost::new(panning_controller, ZoomController::default());
 
     Flex::column()
@@ -264,7 +232,7 @@ fn make_grid_options() -> impl Widget<AppData>{
         .with_child(
             Flex::row()
                 .with_child(Label::new("Show Axis: "))
-                .with_child(Switch::new().lens(AppData::grid_axis_state))
+                .with_child(Switch::new().lens(GridCanvasData::is_grid_visible).lens(AppData::grid_data))
                 .main_axis_alignment(MainAxisAlignment::SpaceBetween)
                 .cross_axis_alignment(CrossAxisAlignment::Start)
                 .must_fill_main_axis(true)

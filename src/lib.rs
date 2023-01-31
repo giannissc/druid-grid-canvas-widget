@@ -1,16 +1,18 @@
 use std::hash::Hash;
 use std::marker::PhantomData;
 use druid::kurbo::Circle;
+use druid::widget::ControllerHost;
 use druid::{BoxConstraints, Data, Env, Event, EventCtx, LayoutCtx, Lens, LifeCycle,
-    LifeCycleCtx, PaintCtx, RenderContext, UpdateCtx, Widget, Selector, Point, Rect, Size, Color, MouseButton, WidgetPod, Affine,};
+    LifeCycleCtx, PaintCtx, RenderContext, UpdateCtx, Widget, Selector, Point, Rect, Size, Color, MouseButton, WidgetPod, Affine, Vec2, WidgetExt,};
 
 use druid::im::{HashMap, Vector, HashSet};
 
 use druid_color_thesaurus::white;
 use log::info;
-use panning::PanningData;
+use panning::{PanningData, PanningController};
 use save_system::{SaveSystemData};
-use zooming::ZoomData;
+use snapping::{GridSnappingData, GridSnappingSystemPainter};
+use zooming::{ZoomData, ZoomController};
 
 pub mod panning;
 pub mod zooming;
@@ -37,11 +39,17 @@ pub const REQUEST_PAINT: Selector =  Selector::new("request-paint");
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 #[derive(Clone, Data, Copy, PartialEq, Debug, Hash, Eq)]
 pub struct GridIndex {
-    pub row: usize,
-    pub col: usize,
+    pub row: isize,
+    pub col: isize,
 }
 
 impl GridIndex {
+    pub fn new(row: isize, col: isize) -> Self {
+        Self {
+            row,
+            col,
+        }
+    }
     pub fn above(self) -> GridIndex {
         GridIndex {
             row: self.row - 1,
@@ -231,20 +239,76 @@ impl<T: GridItem> StackItem<T>{
 //
 //////////////////////////////////////////////////////////////////////////////////////
 #[derive(Clone, PartialEq, Data, Lens)]
-pub struct GridWidgetData<T:GridItem + PartialEq>{
+pub struct GridCanvasData<T:GridItem + PartialEq>{
     pub grid: HashMap<GridIndex, T>,
     pub save_system: SaveSystemData<StackItem<T>>,
     pub action: GridAction,
     pub grid_item: T,
+    pub cell_size: f64,
+    pub is_grid_visible: bool,
+    pub offset_absolute: Point,
+    pub offset_relative: Vec2,
+    pub zoom_scale: f64,
 }
 
-impl<T:GridItem + PartialEq> GridWidgetData<T>{
+impl<T: GridItem + PartialEq> GridSnappingData for GridCanvasData<T> {
+    fn get_cell_size(&self) -> f64 {
+        self.cell_size
+    }
+
+    fn set_cell_size(&mut self, size: f64) {
+        self.cell_size = size;
+    }
+
+    fn get_grid_visibility(&self) -> bool {
+        self.is_grid_visible
+    }
+
+    fn set_grid_visibility(&mut self, state: bool) {
+        self.is_grid_visible = state;
+    }     
+}
+
+impl<T: GridItem + PartialEq> PanningData for GridCanvasData<T> {
+    fn get_absolute_offset(&self) -> Point {
+        self.offset_absolute
+    }
+
+    fn set_absolute_offset(&mut self, offset: Point) {
+        self.offset_absolute = offset
+    }
+
+    fn get_relative_offset(&self) -> druid::Vec2 {
+        self.offset_relative
+    }
+
+    fn set_relative_offset(&mut self, delta: druid::Vec2) {
+        self.offset_relative = delta
+    }
+}
+
+impl<T: GridItem + PartialEq> ZoomData for GridCanvasData<T> {
+    fn get_zoom_scale(&self) -> f64 {
+        self.zoom_scale
+    }
+
+    fn set_zoom_scale(&mut self, scale: f64) {
+        self.zoom_scale = scale;
+    }
+}
+
+impl<T:GridItem + PartialEq> GridCanvasData<T>{
     pub fn new(initial_node: T) -> Self {
-        GridWidgetData {
+        GridCanvasData {
             grid: HashMap::new(),
             save_system: SaveSystemData::new(),
             action: GridAction::Dynamic,
             grid_item: initial_node,
+            cell_size: 50.0,
+            is_grid_visible: true,
+            offset_absolute: Point::new(0.0, 0.0),
+            offset_relative: Vec2::new(0.0, 0.0),
+            zoom_scale: 1.0,
         }
     }
 
@@ -295,8 +359,8 @@ impl<T:GridItem + PartialEq> GridWidgetData<T>{
     pub fn add_node_perimeter(
         &mut self,
         pos: GridIndex,
-        row_n: usize,
-        column_n: usize,
+        row_n: isize,
+        column_n: isize,
         tool: T,
     ) {
         let mut map: HashMap<GridIndex, (T, Option<T>)> = HashMap::new();
@@ -413,12 +477,11 @@ impl<T:GridItem + PartialEq> GridWidgetData<T>{
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 /// 
-/// Grid Widget
+/// GridCanvas Widget
 /// 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // TODO: Keep as widget to perform scaling/translation of child children paint methods
-// TODO: Rename to CanvasWrapper
 // TODO: Move Snapping System out of main to lib and attach to Canvas
 // TODO: Replace grid with canvas
 // TODO: Translate event position to correct location based on scaling/translation offset
@@ -445,16 +508,6 @@ impl<T> GridCanvas<T> {
         }
     }
 
-    fn grid_pos(&self, p: Point) -> Option<GridIndex> {
-        if p.x < 0.0 || p.y < 0.0 || self.cell_size == 0.0 {
-            return None;
-        }
-        let col = (p.x / self.cell_size) as usize;
-        let row = (p.y / self.cell_size) as usize;
-
-        Some(GridIndex { row, col })
-    }
-
     pub fn invalidation_area(&self, pos: GridIndex) -> Rect {
         let point = Point {
             x: self.cell_size * pos.col as f64,
@@ -464,8 +517,8 @@ impl<T> GridCanvas<T> {
     }
 }
 
-impl<T:GridItem + PartialEq> Widget<GridWidgetData<T>> for GridCanvas<T>{
-    fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut GridWidgetData<T>, _env: &Env) {
+impl<T:GridItem + PartialEq> Widget<GridCanvasData<T>> for GridCanvas<T>{
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut GridCanvasData<T>, _env: &Env) {
         
         let mut change_tracker: HashSet<StackItem<T>> = HashSet::new();
         
@@ -504,63 +557,62 @@ impl<T:GridItem + PartialEq> Widget<GridWidgetData<T>> for GridCanvas<T>{
                         }
                     },
                     Event::MouseDown(e) => {
-                        let grid_pos_opt = self.grid_pos(e.pos);
-                            grid_pos_opt.iter().for_each(|pos| {
-                                let option = data.grid.get(pos);
-                                if self.state == GridState::Idle{
-                                    if e.button == MouseButton::Left{
-                                        // info!("Left Click");
-                                        // info!("Start State: {:?}", self.state);
-                                        // info!("Start Action: {:?}", data.action);
-                                        match data.action {
-                                            GridAction::Dynamic => {
-                                                self.state = GridState::Running(GridAction::Dynamic);
-                                                match option{
-                                                    None => {
-                                                        data.action = GridAction::Add;
-                                                    },
-                                                    Some(item)=> {
-                                                        if *item == data.grid_item {
-                                                            data.action = GridAction::Move;
-                                                        } else {
-                                                            data.action = GridAction::Add;                                
-                                                        }
-                                                    }
-                                                }
+                        let (row, col) = data.get_grid_index(e.pos);
+                        let pos = GridIndex::new(row, col);
+                        let option = data.grid.get(&pos);
+                        if self.state == GridState::Idle{
+                            if e.button == MouseButton::Left{
+                                // info!("Left Click");
+                                // info!("Start State: {:?}", self.state);
+                                // info!("Start Action: {:?}", data.action);
+                                match data.action {
+                                    GridAction::Dynamic => {
+                                        self.state = GridState::Running(GridAction::Dynamic);
+                                        match option{
+                                            None => {
+                                                data.action = GridAction::Add;
                                             },
-                                            GridAction::Move => {
-                                                if option.is_some() {
-                                                    self.state = GridState::Running(GridAction::Move);
+                                            Some(item)=> {
+                                                if *item == data.grid_item {
+                                                    data.action = GridAction::Move;
+                                                } else {
+                                                    data.action = GridAction::Add;                                
                                                 }
-                                            },
-                                            _ => {
-                                                self.state = GridState::Running(data.action);
-                                            },                                        
+                                            }
                                         }
-
-                                    } else if e.button == MouseButton::Right{
-                                        // info!("Right Click");
-                                        if let GridAction::Dynamic = data.action{
-                                            self.state = GridState::Running(data.action);
-                                            data.action = GridAction::Remove;
+                                    },
+                                    GridAction::Move => {
+                                        if option.is_some() {
+                                            self.state = GridState::Running(GridAction::Move);
                                         }
-                                    }
+                                    },
+                                    _ => {
+                                        self.state = GridState::Running(data.action);
+                                    },                                        
                                 }
 
-                                if let GridState::Running(_) = self.state{
-                                    if data.action == GridAction::Add {
-                                        if data.add_node(pos, data.grid_item) {
-                                            change_tracker.insert(data.save_system.get_last_item().unwrap().clone());
-                                        }
-                                    } else if data.action == GridAction::Remove && option.is_some(){
-                                        if data.remove_node(pos) {
-                                            change_tracker.insert(data.save_system.get_last_item().unwrap().clone());
-                                        }
-                                    } else if data.action == GridAction::Move && option.is_some() {
-                                        self.start_pos = *pos;
-                                    }
+                            } else if e.button == MouseButton::Right{
+                                // info!("Right Click");
+                                if let GridAction::Dynamic = data.action{
+                                    self.state = GridState::Running(data.action);
+                                    data.action = GridAction::Remove;
                                 }
-                            });
+                            }
+                        }
+
+                        if let GridState::Running(_) = self.state{
+                            if data.action == GridAction::Add {
+                                if data.add_node(&pos, data.grid_item) {
+                                    change_tracker.insert(data.save_system.get_last_item().unwrap().clone());
+                                }
+                            } else if data.action == GridAction::Remove && option.is_some(){
+                                if data.remove_node(&pos) {
+                                    change_tracker.insert(data.save_system.get_last_item().unwrap().clone());
+                                }
+                            } else if data.action == GridAction::Move && option.is_some() {
+                                self.start_pos = pos;
+                            }
+                        }
                         // info!("Acquire State: {:?}", self.state);
                         // info!("Acquire Action: {:?}", data.action);
                     },
@@ -572,33 +624,32 @@ impl<T:GridItem + PartialEq> Widget<GridWidgetData<T>> for GridCanvas<T>{
                 // info!("Running State");
                 match event {            
                     Event::MouseMove(e) => {
-                        let grid_pos_opt = self.grid_pos(e.pos);
-                        grid_pos_opt.iter().for_each(|pos| {
-                            let option = data.grid.get(pos);
-                            match data.action{
-                                GridAction::Add => {
-                                    if data.add_node(pos, data.grid_item) {
+                        let (row, col) = data.get_grid_index(e.pos);
+                        let pos = GridIndex::new(row, col);
+                        let option = data.grid.get(&pos);
+                        match data.action{
+                            GridAction::Add => {
+                                if data.add_node(&pos, data.grid_item) {
+                                    change_tracker.insert(data.save_system.get_last_item().unwrap().clone());
+                                }                                    
+                            },
+                            GridAction::Move => {
+                                if self.start_pos != pos {
+                                    if data.move_node(&self.start_pos, &pos) {
                                         change_tracker.insert(data.save_system.get_last_item().unwrap().clone());
-                                    }                                    
-                                },
-                                GridAction::Move => {
-                                    if self.start_pos != *pos {
-                                        if data.move_node(&self.start_pos, pos) {
-                                            change_tracker.insert(data.save_system.get_last_item().unwrap().clone());
-                                            self.start_pos = *pos;
-                                        }
+                                        self.start_pos = pos;
                                     }
-                                },
-                                GridAction::Remove => {
-                                    if option.is_some(){
-                                        if data.remove_node(pos) {
-                                            change_tracker.insert(data.save_system.get_last_item().unwrap().clone());
-                                        }
-                                    }        
-                                },
-                                _ => (),
-                            }
-                        });
+                                }
+                            },
+                            GridAction::Remove => {
+                                if option.is_some(){
+                                    if data.remove_node(&pos) {
+                                        change_tracker.insert(data.save_system.get_last_item().unwrap().clone());
+                                    }
+                                }        
+                            },
+                            _ => (),
+                        }
                     },
         
                     Event::MouseUp(e) => {
@@ -639,7 +690,7 @@ impl<T:GridItem + PartialEq> Widget<GridWidgetData<T>> for GridCanvas<T>{
         }
     }
 
-    fn lifecycle(&mut self, _ctx: &mut LifeCycleCtx, _event: &LifeCycle, _data: &GridWidgetData<T>, _env: &Env) {
+    fn lifecycle(&mut self, _ctx: &mut LifeCycleCtx, _event: &LifeCycle, _data: &GridCanvasData<T>, _env: &Env) {
         // if let LifeCycle::WidgetAdded = event {
         //     self.previous_stack_length = data.save_stack.len();
         //     if data.playback_index != 0 {
@@ -651,8 +702,8 @@ impl<T:GridItem + PartialEq> Widget<GridWidgetData<T>> for GridCanvas<T>{
     fn update(
         &mut self,
         _ctx: &mut UpdateCtx,
-        _old_data: &GridWidgetData<T>,
-        _data: &GridWidgetData<T>,
+        _old_data: &GridCanvasData<T>,
+        _data: &GridCanvasData<T>,
         _env: &Env,
     ) {       
     }
@@ -661,7 +712,7 @@ impl<T:GridItem + PartialEq> Widget<GridWidgetData<T>> for GridCanvas<T>{
         &mut self,
         _ctx: &mut LayoutCtx,
         bc: &BoxConstraints,
-        _data: &GridWidgetData<T>,
+        _data: &GridCanvasData<T>,
         _env: &Env,
     ) -> Size {
         let width = bc.max().width;
@@ -675,7 +726,7 @@ impl<T:GridItem + PartialEq> Widget<GridWidgetData<T>> for GridCanvas<T>{
         }
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx, data: &GridWidgetData<T>, _env: &Env) {
+    fn paint(&mut self, ctx: &mut PaintCtx, data: &GridCanvasData<T>, _env: &Env) {
         //debug!("Running paint method");
         // Draw grid cells
 
@@ -691,16 +742,13 @@ impl<T:GridItem + PartialEq> Widget<GridWidgetData<T>> for GridCanvas<T>{
         let paint_rectangles = damage_region.rects();
 
         for paint_rect in paint_rectangles.iter() {
-            let from_grid_pos: GridIndex = self.grid_pos(paint_rect.origin()).unwrap();
+            let (row, col) =  data.get_grid_index(paint_rect.origin());
+            let from_grid_pos: GridIndex = GridIndex::new(row, col);
             let from_row = from_grid_pos.row;
             let from_col = from_grid_pos.col;
 
-            let to_grid_pos = self
-                .grid_pos(Point::new(paint_rect.max_x(), paint_rect.max_y()))
-                .unwrap_or(GridIndex {
-                    col: visible_columns - 1,
-                    row: visible_rows - 1,
-                });
+            let (row, col) =  data.get_grid_index(Point::new(paint_rect.max_x(), paint_rect.max_y()));
+            let to_grid_pos = GridIndex::new(row, col);
             let to_row = to_grid_pos.row;
             let to_col = to_grid_pos.col;
 
@@ -709,79 +757,28 @@ impl<T:GridItem + PartialEq> Widget<GridWidgetData<T>> for GridCanvas<T>{
             //debug!("Paint from col: {:?} to col {:?}", from_col, to_col);
 
             // Partial Area Paint Logic
+            ctx.with_save(|ctx| {
+                let translate = Affine::translate(data.get_absolute_offset().to_vec2());
+                let scale = Affine::scale(data.get_zoom_scale());
+                ctx.transform(translate);
+                ctx.transform(scale);
 
-            for row in from_row..=to_row {
-                for col in from_col..=to_col {
-                    let point = Point {
-                        x: self.cell_size * col as f64,
-                        y: self.cell_size * row as f64,
-                    };
-                    let rect = Rect::from_origin_size(point, Size {width: self.cell_size, height: self.cell_size});
+                for row in from_row..=to_row {
+                    for col in from_col..=to_col {
+                        let point = Point {
+                            x: self.cell_size * col as f64,
+                            y: self.cell_size * row as f64,
+                        };
+                        let rect = Rect::from_origin_size(point, Size {width: self.cell_size, height: self.cell_size});
 
-                    let grid_pos = GridIndex { row, col };
+                        let grid_pos = GridIndex { row, col };
 
-                    if let Some(runner) = data.grid.get(&grid_pos){
-                        ctx.fill(rect, runner.get_color());
+                        if let Some(runner) = data.grid.get(&grid_pos){
+                            ctx.fill(rect, runner.get_color());
+                        }
                     }
                 }
-            }
+            });
         }
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////
-///
-/// CanvasWrapper
-/// 
-////////////////////////////////////////////////////////////////////////////////////////////
-
-pub struct CanvasWrapper<T, W>{
-    child: WidgetPod<T, W>,
-}
-
-impl<T, W:Widget<T>> CanvasWrapper<T, W> {
-    pub fn new(inner: W) -> Self {
-        CanvasWrapper { child: WidgetPod::new(inner) }
-    }
-}
-
-impl<T: Data + PanningData + ZoomData, W: Widget<T>> Widget<T> for CanvasWrapper<T, W> {
-    fn event(&mut self, ctx: &mut druid::EventCtx, event: &Event, data: &mut T, env: &druid::Env) {
-        self.child.event(ctx, event, data, env);
-    }
-
-    fn lifecycle(&mut self, ctx: &mut druid::LifeCycleCtx, event: &druid::LifeCycle, data: &T, env: &druid::Env) {
-        self.child.lifecycle(ctx, event, data, env);
-    }
-
-    fn update(&mut self, ctx: &mut druid::UpdateCtx, _old_data: &T, data: &T, env: &druid::Env) {
-        self.child.update(ctx, data, env);
-    }
-
-    fn layout(&mut self, ctx: &mut druid::LayoutCtx, bc: &druid::BoxConstraints, data: &T, env: &druid::Env) -> Size {
-        let size = self.child.layout(ctx, bc, data, env);
-        self.child.set_origin(ctx, data, env, Point::ORIGIN);
-        size
-    }
-
-    fn paint(&mut self, ctx: &mut druid::PaintCtx, data: &T, env: &druid::Env) {
-        
-        let mut pos = Point::new(50.0, 50.0);
-
-        // pos.x += data.get_translation_offset().x;
-        // pos.y += data.get_translation_offset().y;
-
-        ctx.with_save(|ctx| {
-            let translate = Affine::translate(data.get_absolute_offset().to_vec2());
-            let scale = Affine::scale(data.get_zoom_scale());
-            ctx.transform(translate);
-            ctx.transform(scale);
-            ctx.fill(Circle::new(pos, 10.0), &white::PLATINUM);
-            self.child.paint(ctx, data, env);
-        });
-
-        
-        // println!("Offset: {:?}", data.get_translation_offset());
-        
     }
 }
