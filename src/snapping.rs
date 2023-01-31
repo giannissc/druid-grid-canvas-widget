@@ -6,7 +6,7 @@ use druid_color_thesaurus::gray;
 use crate::panning::PanningData;
 use crate::zooming::ZoomData;
 
-pub trait GridSnappingSystem: PanningData + ZoomData {
+pub trait GridSnappingData: PanningData + ZoomData {
     fn get_cell_size(&self) -> f64;
     fn set_cell_size(&mut self, size: f64);
     fn get_grid_visibility(&self) -> bool;
@@ -56,7 +56,7 @@ impl Default for GridSnappingSystemPainter {
 }
 
 impl GridSnappingSystemPainter {
-    pub fn square_grid<T: Data + GridSnappingSystem>(&self) -> Painter<T> {
+    pub fn square_grid<T: Data + GridSnappingData>(&self) -> Painter<T> {
         let origin_visibility = self.show_origin;
         let debug_visibility = self.debug_offset;
 
@@ -122,7 +122,7 @@ impl GridSnappingSystemPainter {
         })
     }
 
-    pub fn dot_grid<T: Data + GridSnappingSystem>(&self) -> Painter<T> {
+    pub fn dot_grid<T: Data + GridSnappingData>(&self) -> Painter<T> {
         let origin_visibility = self.show_origin;
         let debug_visibility = self.debug_offset;
 
