@@ -7,16 +7,16 @@ use crate::panning::PanningData;
 use crate::zooming::ZoomData;
 
 pub trait GridSnappingSystem: PanningData + ZoomData {
-    pub fn get_cell_size(&self) -> f64;
-    pub fn set_cell_size(&mut self, size: f64);
-    pub fn get_grid_visibility(&self) -> bool;
-    pub fn set_grid_visibility(&mut self, state: bool);
-    pub fn move_to_grid_position(&self, desired_position: Point) -> Point {
+    fn get_cell_size(&self) -> f64;
+    fn set_cell_size(&mut self, size: f64);
+    fn get_grid_visibility(&self) -> bool;
+    fn set_grid_visibility(&mut self, state: bool);
+    fn move_to_grid_position(&self, desired_position: Point) -> Point {
         let (row, col) = self.get_grid_index(desired_position);
         self.get_grid_position(row, col)
     }
 
-    pub fn get_grid_index(&self, position: Point) -> (isize, isize) {
+    fn get_grid_index(&self, position: Point) -> (isize, isize) {
         // Normalise translation offset
         let mut position_norm = position; 
         position_norm.x -= self.get_absolute_offset().x;
@@ -30,7 +30,7 @@ pub trait GridSnappingSystem: PanningData + ZoomData {
         (row, col)
     }
 
-    pub fn get_grid_position(&self, row: isize, col:isize) -> Point {
+    fn get_grid_position(&self, row: isize, col:isize) -> Point {
         let scaled_cell_size = self.get_cell_size() * self.get_zoom_scale();
 
         Point { 
