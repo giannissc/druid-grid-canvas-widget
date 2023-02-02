@@ -151,7 +151,7 @@ fn make_ui() -> impl Widget<AppData>{
 
     let grid_container= grid.background(snap_painter.square_grid());
 
-    let pan_control_host = ControllerHost::new(grid, PanningController::default());
+    let pan_control_host = ControllerHost::new(grid_container, PanningController::default());
     let zoom_control_host = ControllerHost::new(pan_control_host, ZoomController::default());
 
     Flex::column()
