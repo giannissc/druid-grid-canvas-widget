@@ -20,7 +20,6 @@ pub struct Canvas<T>
     children: Vec<Box<dyn Positioned<T>>>,
     position_map: HashMap<RectInt, usize>,
     id_map: HashMap<WidgetId, usize>,
-    
 }
 
 
@@ -41,7 +40,7 @@ impl<T: Data> Canvas<T>
         }
     }
 
-    pub fn add_child(&mut self, ctx: &mut EventCtx, inner: impl Positioned<T> + 'static, to: RectInt) where
+    pub fn add_child(&mut self, ctx: &mut EventCtx, child: impl Positioned<T> + 'static, to: RectInt) where
     dyn Positioned<T> : Widget<T> {
         let index = self.position_map.remove(&to);
         
@@ -50,7 +49,7 @@ impl<T: Data> Canvas<T>
         }
 
         let index = self.children.len();
-        self.children.insert(index, Box::new(inner));
+        self.children.insert(index, Box::new(child));
         self.position_map.insert(to, index);
         ctx.children_changed();
     }
