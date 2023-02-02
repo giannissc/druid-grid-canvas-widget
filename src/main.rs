@@ -149,14 +149,10 @@ fn make_ui() -> impl Widget<AppData>{
     let snap_painter =  GridSnapPainter::default();
     let grid = GridCanvas::new().with_id(GRID_ID).lens(AppData::grid_data);
 
-    let grid_container =  Container::new(grid).lens(GridCanvasData::snap_data).lens(AppData::grid_data);
-    grid_container.set_background(snap_painter.square_grid());
+    let grid_container= grid.background(snap_painter.square_grid());
 
-    let pan_control = PanningController::default().lens(GridSnapData::pan_data).lens(GridCanvasData::snap_data).lens(AppData::grid_data);
-    let zoom_control = ZoomController::default().lens(GridSnapData::zoom_data).lens(GridCanvasData::snap_data).lens(AppData::grid_data);
-
-    let pan_control_host = ControllerHost::new(grid, pan_control);
-    let zoom_control_host = ControllerHost::new(pan_control_host, zoom_control);
+    let pan_control_host = ControllerHost::new(grid, PanningController::default());
+    let zoom_control_host = ControllerHost::new(pan_control_host, ZoomController::default());
 
     Flex::column()
         .with_flex_child(zoom_control_host, 1.0) // Grid widget
