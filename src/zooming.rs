@@ -1,9 +1,32 @@
-use druid::{widget::Controller, Data, Widget, Event};
-pub trait ZoomData {
-    fn get_zoom_scale(&self) -> f64;
-    fn set_zoom_scale(&mut self, scale: f64);
+///////////////////////////////////////////////////////////////////////////////////////////////////
+/// 
+/// Imports
+/// 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+use druid::{widget::Controller, Data, Widget, Event, Lens};
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+/// 
+/// ZoomData
+/// 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Data, Lens, PartialEq)]
+pub struct ZoomData {
+    pub zoom_scale: f64,
 }
 
+impl ZoomData {
+    pub fn new() -> Self {
+        Self { zoom_scale: 1.0 }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+/// 
+/// ZoomController
+/// 
+///////////////////////////////////////////////////////////////////////////////////////////////////
 pub struct ZoomController {
     min_zoom_scale: f64,
     max_zoom_scale: f64,
@@ -30,11 +53,11 @@ impl Default for ZoomController {
     }
 }
 
-impl<T: Data + ZoomData, W: Widget<T>> Controller<T, W> for ZoomController {
-    fn event(&mut self, child: &mut W, ctx: &mut druid::EventCtx, event: &Event, data: &mut T, env: &druid::Env) {
+impl<W: Widget<ZoomData>> Controller<ZoomData, W> for ZoomController {
+    fn event(&mut self, child: &mut W, ctx: &mut druid::EventCtx, event: &Event, data: &mut ZoomData, env: &druid::Env) {
         match event {
             Event::Wheel(wheel) if wheel.mods.ctrl() => {
-                let mut current_zoom_scale = data.get_zoom_scale();
+                let mut current_zoom_scale = data.zoom_scale;
                 if wheel.wheel_delta.y < 0.0 && current_zoom_scale < self.max_zoom_scale {
                      current_zoom_scale += self.zoom_step;
                     
@@ -48,7 +71,7 @@ impl<T: Data + ZoomData, W: Widget<T>> Controller<T, W> for ZoomController {
                         current_zoom_scale = self.min_zoom_scale
                     }
                 }
-                data.set_zoom_scale(current_zoom_scale);
+                data.zoom_scale = current_zoom_scale;
                 // println!("Zoom scale: {:?}", current_zoom_scale);
             },
 
