@@ -1,14 +1,15 @@
-use druid::im::Vector;
-use druid::{theme, AppLauncher, Color, LocalizedString, WindowDesc, Data, Lens, Widget, WidgetExt, WidgetId, Command, Target, Point, };
+use druid::im::{Vector};
+use druid::{theme, AppLauncher, Color, LocalizedString, WindowDesc, Data, Lens, Widget, WidgetExt, WidgetId, Command, Target,};
 
-use druid::widget::{Flex, Label, MainAxisAlignment, CrossAxisAlignment, Switch, Button, ControllerHost,};
+use druid::widget::{Flex, Label, MainAxisAlignment, CrossAxisAlignment, Switch, Button, ControllerHost, LensWrap, Container,};
 
 use druid_color_thesaurus::*;
 
-use druid_grid_graph_widget::panning::{PanningController, PanningData};
-use druid_grid_graph_widget::zooming::{ZoomController, ZoomData};
-use druid_grid_graph_widget::{GridCanvasData, GridCanvas, GridItem, StackItem, GridIndex, UPDATE_GRID_PLAYBACK};
-use druid_grid_graph_widget::snapping::{GridSnappingSystemPainter};
+use druid_grid_graph_widget::grid_canvas::{GridCanvasData, GridCanvas, UPDATE_GRID_PLAYBACK};
+use druid_grid_graph_widget::panning::{PanningController};
+use druid_grid_graph_widget::zooming::{ZoomController};
+use druid_grid_graph_widget::{GridItem, StackItem, GridIndex};
+use druid_grid_graph_widget::snapping::{GridSnapPainter, GridSnapData};
 //////////////////////////////////////////////////////////////////////////////////////
 // Constants
 //////////////////////////////////////////////////////////////////////////////////////
@@ -93,41 +94,13 @@ impl GridItem for GridNodeType<Net> {
 pub struct AppData{
     pub is_paused: bool,
     pub is_running: bool,
-    pub grid_data: GridCanvasData<GridNodeType<Net>>,
     pub updates_per_second: f64,
+    pub grid_data: GridCanvasData<GridNodeType<Net>>,
 }
 
 impl AppData {
     pub fn to_period_milli(&self) -> u64 {
         (1000. / self.updates_per_second) as u64
-    }
-}
-
-impl PanningData for AppData {
-    fn get_absolute_offset(&self) -> Point {
-        self.grid_data.offset_absolute
-    }
-
-    fn set_absolute_offset(&mut self, offset: Point) {
-        self.grid_data.offset_absolute = offset
-    }
-
-    fn get_relative_offset(&self) -> druid::Vec2 {
-        self.grid_data.offset_relative
-    }
-
-    fn set_relative_offset(&mut self, delta: druid::Vec2) {
-        self.grid_data.offset_relative = delta
-    }
-}
-
-impl ZoomData for AppData {
-    fn get_zoom_scale(&self) -> f64 {
-        self.grid_data.zoom_scale
-    }
-
-    fn set_zoom_scale(&mut self, scale: f64) {
-        self.grid_data.zoom_scale = scale;
     }
 }
 
@@ -145,8 +118,8 @@ fn main() {
     let mut data = AppData {
         is_paused: false,
         is_running: false,
-        grid_data: GridCanvasData::new(GridNodeType::Wall(1)),
         updates_per_second: 10.0,
+        grid_data: GridCanvasData::new(GridNodeType::Wall(1), 50.0),
     };
 
     let mut pattern = Vector::new();
@@ -173,16 +146,20 @@ fn main() {
 fn make_ui() -> impl Widget<AppData>{
     let cell_size = 50.0;
 
-    let snapping =  GridSnappingSystemPainter::default();
-    let grid = GridCanvas::new(cell_size).background(snapping.square_grid())
-    .with_id(GRID_ID)
-    .lens(AppData::grid_data);
+    let snap_painter =  GridSnapPainter::default();
+    let grid = GridCanvas::new().with_id(GRID_ID).lens(AppData::grid_data);
 
-    let panning_controller = ControllerHost::new(grid, PanningController::default());
-    let zoom_controller = ControllerHost::new(panning_controller, ZoomController::default());
+    let grid_container =  Container::new(grid).lens(GridCanvasData::snap_data).lens(AppData::grid_data);
+    grid_container.set_background(snap_painter.square_grid());
+
+    let pan_control = PanningController::default().lens(GridSnapData::pan_data).lens(GridCanvasData::snap_data).lens(AppData::grid_data);
+    let zoom_control = ZoomController::default().lens(GridSnapData::zoom_data).lens(GridCanvasData::snap_data).lens(AppData::grid_data);
+
+    let pan_control_host = ControllerHost::new(grid, pan_control);
+    let zoom_control_host = ControllerHost::new(pan_control_host, zoom_control);
 
     Flex::column()
-        .with_flex_child(zoom_controller, 1.0) // Grid widget
+        .with_flex_child(zoom_control_host, 1.0) // Grid widget
         .with_child(make_control_bar())
         .main_axis_alignment(MainAxisAlignment::SpaceAround)
         .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -204,11 +181,11 @@ fn make_grid_options() -> impl Widget<AppData>{
             Flex::row()
                 .with_child(Label::new("Playback: "))
                 .with_child(Button::new("Next").lens(AppData::grid_data).on_click(|ctx, data, _env|{
-                    data.grid_data.save_system.redo();
+                    data.grid_data.save_data.redo();
                     ctx.submit_command(Command::new(UPDATE_GRID_PLAYBACK, (), Target::Widget(GRID_ID)));
                 }))
                 .with_child(Button::new("Previous").lens(AppData::grid_data).on_click(|ctx, data, _env|{
-                    data.grid_data.save_system.undo();
+                    data.grid_data.save_data.undo();
                     ctx.submit_command(Command::new(UPDATE_GRID_PLAYBACK, (), Target::Widget(GRID_ID)));
                 }))
         )
@@ -232,7 +209,7 @@ fn make_grid_options() -> impl Widget<AppData>{
         .with_child(
             Flex::row()
                 .with_child(Label::new("Show Axis: "))
-                .with_child(Switch::new().lens(GridCanvasData::is_grid_visible).lens(AppData::grid_data))
+                .with_child(Switch::new().lens(GridSnapData::grid_visibility).lens(GridCanvasData::snap_data).lens(AppData::grid_data))
                 .main_axis_alignment(MainAxisAlignment::SpaceBetween)
                 .cross_axis_alignment(CrossAxisAlignment::Start)
                 .must_fill_main_axis(true)
