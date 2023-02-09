@@ -4,18 +4,26 @@
 /// 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 use druid::kurbo::Circle;
-use druid::widget::Painter;
-use druid::{ Point, theme, RenderContext, Size, Rect, Data, Lens };
+use druid::widget::{Painter,};
+use druid::{ Point, theme, RenderContext, Size, Rect, Data, Lens,};
 use druid_color_thesaurus::{gray};
 
-use crate::panning::{PanData};
-use crate::zooming::{ZoomData};
+use crate::panning::{PanData, PanDataAccess, };
+use crate::zooming::{ZoomData, ZoomDataAccess,};
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 /// 
 /// GridSnapData
 /// 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+pub trait GridSnapDataAccess: PanDataAccess + ZoomDataAccess {
+    fn get_cell_size(&self) -> f64;
+    fn set_cell_size(&mut self, size: f64);
+    fn get_grid_visibility(&self) -> bool;
+    fn set_grid_visibility(&mut self, state: bool);
+    fn move_to_grid_position(&self, desired_position: Point) -> Point;
+}
+
 #[derive(Clone, Data, Lens, PartialEq)]
 pub struct GridSnapData {
     pub cell_size: f64,
@@ -33,7 +41,7 @@ impl GridSnapData {
             pan_data: PanData::new(),
         }
     }
-    pub fn move_to_grid_position(&self, desired_position: Point) -> Point {
+    pub fn move_to_grid_position_2(&self, desired_position: Point) -> Point {
         let (row, col) = self.get_grid_index(desired_position);
         self.get_grid_position(row, col)
     }
@@ -62,6 +70,56 @@ impl GridSnapData {
     }
 }
 
+impl GridSnapDataAccess for GridSnapData {
+    fn get_cell_size(&self) -> f64 {
+        self.cell_size
+    }
+
+    fn set_cell_size(&mut self, size: f64) {
+        self.cell_size = size;
+    }
+
+    fn get_grid_visibility(&self) -> bool {
+        self.grid_visibility
+    }
+
+    fn set_grid_visibility(&mut self, state: bool) {
+        self.grid_visibility = state;
+    }
+
+    fn move_to_grid_position(&self, desired_position: Point) -> Point {
+        self.move_to_grid_position_2(desired_position)
+    }
+}
+
+impl ZoomDataAccess for GridSnapData {
+    fn get_zoom_scale(&self) -> f64 {
+        self.zoom_data.zoom_scale
+    }
+
+    fn set_zoom_scale(&mut self, scale: f64) {
+        self.zoom_data.zoom_scale = scale;
+    }
+}
+
+impl PanDataAccess for GridSnapData {
+    fn get_absolute_offset(&self) -> Point {
+        self.pan_data.absolute_offset
+    }
+
+    fn set_absolute_offset(&mut self, offset: Point) {
+        self.pan_data.absolute_offset = offset;
+    }
+
+    fn get_relative_offset(&self) -> druid::Vec2 {
+        self.pan_data.relative_offset
+    }
+
+    fn set_relative_offset(&mut self, offset: druid::Vec2) {
+        self.pan_data.relative_offset = offset;
+    }
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 /// 
 /// GridSnapPainter
@@ -83,12 +141,13 @@ impl Default for GridSnapPainter {
 }
 
 impl GridSnapPainter {
-    pub fn square_grid(&self) -> Painter<GridSnapData> {
+    pub fn square_grid<T: Data + GridSnapDataAccess>(&self) -> Painter<T> {
         let origin_visibility = self.show_origin;
         let debug_visibility = self.debug_offset;
 
-        Painter::new(move |ctx, data: &GridSnapData, _env| {
-            let scaled_cell_size = data.cell_size * data.zoom_data.zoom_scale;
+        Painter::new(move |ctx, data: &T, _env| {
+            // let scaled_cell_size = data.cell_size * data.zoom_data.zoom_scale;
+            let scaled_cell_size = data.get_cell_size() * data.get_zoom_scale();
             let line_width = scaled_cell_size * 0.05;
             
             // Partial Paint Setup
@@ -101,7 +160,7 @@ impl GridSnapPainter {
             ctx.fill(rect, &gray::OUTER_SPACE);
 
             // Axes Painting Logic
-            if data.grid_visibility {
+            if data.get_grid_visibility() {
 
                 let start_point = data.move_to_grid_position(invalidation_rect.origin());
                 let end_point = data.move_to_grid_position(Point {
@@ -118,7 +177,8 @@ impl GridSnapPainter {
                 for row in from_row..= to_row {
                     let mut from_point = Point::new(0.0, scaled_cell_size * row as f64 - line_width / 2.0 );
                     // Integrate translation data to line rendering
-                    from_point.y += data.pan_data.absolute_offset.y % scaled_cell_size;
+                    // from_point.y += data.pan_data.absolute_offset.y % scaled_cell_size;
+                    from_point.y += data.get_absolute_offset().y % scaled_cell_size;
                     let size = Size::new(ctx.size().width, line_width);
                     let rect = Rect::from_origin_size(from_point, size);
                     ctx.fill(rect, &gray::GAINSBORO)
@@ -127,7 +187,8 @@ impl GridSnapPainter {
                 for col in from_col..=to_col {
                     let mut from_point = Point::new(scaled_cell_size * col as f64 - line_width / 2.0, 0.0);
                     // Integrate translation data to line rendering
-                    from_point.x += data.pan_data.absolute_offset.x % scaled_cell_size;
+                    // from_point.x += data.pan_data.absolute_offset.x % scaled_cell_size;
+                    from_point.x += data.get_absolute_offset().x % scaled_cell_size;
                     let size = Size::new(line_width, ctx.size().width);
                     let rect = Rect::from_origin_size(from_point, size);
                     ctx.fill(rect, &gray::GAINSBORO)
@@ -135,13 +196,15 @@ impl GridSnapPainter {
             }
 
             if origin_visibility {
-                let center = Point::new(data.pan_data.absolute_offset.x, data.pan_data.absolute_offset.y);
+                // let center = Point::new(data.pan_data.absolute_offset.x, data.pan_data.absolute_offset.y);
+                let center = Point::new(data.get_absolute_offset().x, data.get_absolute_offset().y);
                 let circle = Circle::new(center, 5.0);
                 ctx.fill(circle, &druid_color_thesaurus::red::CARMINE);
             }
 
             if debug_visibility {
-                let center = Point::new(data.pan_data.absolute_offset.x % scaled_cell_size,data.pan_data.absolute_offset.y % scaled_cell_size);
+                // let center = Point::new(data.pan_data.absolute_offset.x % scaled_cell_size,data.pan_data.absolute_offset.y % scaled_cell_size);
+                let center = Point::new(data.get_absolute_offset().x % scaled_cell_size,data.get_absolute_offset().y % scaled_cell_size);
                 let circle = Circle::new(center, 5.0);
                 ctx.fill(circle, &druid_color_thesaurus::pink::CORAL_PINK);
 

@@ -11,8 +11,15 @@ use log::debug;
 /// PanningData
 /// 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+pub trait PanDataAccess {
+fn get_absolute_offset(&self) -> Point;
+fn set_absolute_offset(&mut self, offset: Point);
+fn get_relative_offset(&self) -> Vec2;
+fn set_relative_offset(&mut self, offset: Vec2);
+}
+
 #[derive(Clone, Data, Lens, PartialEq)]
-pub struct PanData {
+pub struct PanData where PanData:PanDataAccess {
     pub absolute_offset: Point,
     pub relative_offset: Vec2,
 }
@@ -26,12 +33,30 @@ impl PanData {
     }
 }
 
+impl PanDataAccess for PanData {
+    fn get_absolute_offset(&self) -> Point {
+        self.absolute_offset
+    }
+
+    fn set_absolute_offset(&mut self, offset: Point) {
+        self.absolute_offset = offset;
+    }
+
+    fn get_relative_offset(&self) -> Vec2 {
+        self.relative_offset
+    }
+
+    fn set_relative_offset(&mut self, offset: Vec2) {
+        self.relative_offset = offset
+    }
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 /// 
 /// Panning Controller
 /// 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-pub struct PanningController{
+pub struct PanController{
     start_mouse_position: Option<Point>,
     previous_mouse_position: Option<Point>,
     start_offset: Point,
@@ -39,9 +64,9 @@ pub struct PanningController{
     max_offset: Point,
 }
 
-impl PanningController {
+impl PanController {
     pub fn new(min_offset: Point, max_offset: Point) -> Self {
-        PanningController { 
+        PanController { 
             start_mouse_position: None,
             previous_mouse_position: None,
             start_offset: Point::new(0.0, 0.0),
@@ -51,7 +76,7 @@ impl PanningController {
     }
 }
 
-impl Default for PanningController {
+impl Default for PanController {
     fn default() -> Self {
         Self { 
             start_mouse_position: None,
@@ -63,8 +88,8 @@ impl Default for PanningController {
     }
 }
 
-impl<W: Widget<PanData>> Controller<PanData, W> for PanningController {
-    fn event(&mut self, child: &mut W, ctx: &mut druid::EventCtx, event: &druid::Event, data: &mut PanData, env: &druid::Env) {
+impl<T: Data + PanDataAccess, W: Widget<T>> Controller<T, W> for PanController {
+    fn event(&mut self, child: &mut W, ctx: &mut druid::EventCtx, event: &druid::Event, data: &mut T, env: &druid::Env) {
 
         child.event(ctx, event, data, env);
 
@@ -79,7 +104,8 @@ impl<W: Widget<PanData>> Controller<PanData, W> for PanningController {
                 if mouse_event.button.is_middle() {
                     self.start_mouse_position = Some(mouse_event.window_pos);
                     self.previous_mouse_position = Some(mouse_event.window_pos);
-                    self.start_offset = data.absolute_offset;
+                    // self.start_offset = data.absolute_offset;
+                    self.start_offset = data.get_absolute_offset();
                     debug!("Start offset: {:?}", self.start_offset);
                     ctx.set_active(true);
                     ctx.request_focus();
@@ -90,7 +116,8 @@ impl<W: Widget<PanData>> Controller<PanData, W> for PanningController {
                 if let (Some(start_mouse_position), Some(previous_mouse_position)) = (self.start_mouse_position, self.previous_mouse_position) {
                     // Calculate delta from current position
                     release_delta = mouse_event.window_pos - start_mouse_position;
-                    data.relative_offset = mouse_event.window_pos - previous_mouse_position;
+                    // data.relative_offset = mouse_event.window_pos - previous_mouse_position;
+                    data.set_relative_offset(mouse_event.window_pos - previous_mouse_position);
                     let mut offset = self.start_offset + release_delta;
 
                     self.previous_mouse_position = Some(mouse_event.window_pos);
@@ -107,9 +134,10 @@ impl<W: Widget<PanData>> Controller<PanData, W> for PanningController {
                         offset.y = self.min_offset.y;
                     }
 
-                    data.absolute_offset = offset;
+                    // data.absolute_offset = offset;
+                    data.set_absolute_offset(offset);
                     ctx.set_handled();
-                    debug!("Current delta: {:?}", data.relative_offset);
+                    // debug!("Current delta: {:?}", data.relative_offset);
                 }
 
             },
@@ -118,8 +146,8 @@ impl<W: Widget<PanData>> Controller<PanData, W> for PanningController {
                     ctx.set_active(false);
                     ctx.resign_focus();
                     self.start_mouse_position = None;
-                    debug!("Finish offset: {:?}", data.absolute_offset);
-                    debug!("Release delta: {:?}\n", release_delta);
+                    // debug!("Finish offset: {:?}", data.absolute_offset);
+                    // debug!("Release delta: {:?}\n", release_delta);
                 }
             }
             _ => {}

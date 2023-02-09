@@ -1,15 +1,15 @@
 use druid::im::{Vector};
-use druid::{theme, AppLauncher, Color, LocalizedString, WindowDesc, Data, Lens, Widget, WidgetExt, WidgetId, Command, Target,};
+use druid::{theme, AppLauncher, Color, LocalizedString, WindowDesc, Data, Lens, Widget, WidgetExt, WidgetId, Command, Target, };
 
-use druid::widget::{Flex, Label, MainAxisAlignment, CrossAxisAlignment, Switch, Button, ControllerHost, LensWrap, Container,};
+use druid::widget::{Flex, Label, MainAxisAlignment, CrossAxisAlignment, Switch, Button, ControllerHost,};
 
 use druid_color_thesaurus::*;
 
 use druid_grid_graph_widget::grid_canvas::{GridCanvasData, GridCanvas, UPDATE_GRID_PLAYBACK};
-use druid_grid_graph_widget::panning::{PanningController};
-use druid_grid_graph_widget::zooming::{ZoomController};
+use druid_grid_graph_widget::panning::{PanController, PanDataAccess};
+use druid_grid_graph_widget::zooming::{ZoomController, ZoomDataAccess};
 use druid_grid_graph_widget::{GridItem, StackItem, GridIndex};
-use druid_grid_graph_widget::snapping::{GridSnapPainter, GridSnapData};
+use druid_grid_graph_widget::snapping::{GridSnapPainter, GridSnapData, GridSnapDataAccess};
 //////////////////////////////////////////////////////////////////////////////////////
 // Constants
 //////////////////////////////////////////////////////////////////////////////////////
@@ -104,6 +104,56 @@ impl AppData {
     }
 }
 
+impl ZoomDataAccess for AppData {
+    fn get_zoom_scale(&self) -> f64 {
+        self.grid_data.snap_data.zoom_data.zoom_scale
+    }
+
+    fn set_zoom_scale(&mut self, scale: f64) {
+        self.grid_data.snap_data.zoom_data.zoom_scale = scale;
+    }
+}
+
+impl PanDataAccess for AppData {
+    fn get_absolute_offset(&self) -> druid::Point {
+        self.grid_data.snap_data.pan_data.absolute_offset
+    }
+
+    fn set_absolute_offset(&mut self, offset: druid::Point) {
+        self.grid_data.snap_data.pan_data.absolute_offset = offset
+    }
+
+    fn get_relative_offset(&self) -> druid::Vec2 {
+        self.grid_data.snap_data.pan_data.relative_offset
+    }
+
+    fn set_relative_offset(&mut self, offset: druid::Vec2) {
+        self.grid_data.snap_data.pan_data.relative_offset = offset;
+    }
+}
+
+impl GridSnapDataAccess for AppData {
+    fn get_cell_size(&self) -> f64 {
+        self.grid_data.snap_data.cell_size
+    }
+
+    fn set_cell_size(&mut self, size: f64) {
+        self.grid_data.snap_data.cell_size = size;
+    }
+
+    fn get_grid_visibility(&self) -> bool {
+        self.grid_data.snap_data.grid_visibility
+    }
+
+    fn set_grid_visibility(&mut self, state: bool) {
+        self.grid_data.snap_data.grid_visibility = state;
+    }
+
+    fn move_to_grid_position(&self, desired_position: druid::Point) -> druid::Point {
+        self.grid_data.snap_data.move_to_grid_position_2(desired_position)
+    }
+}
+
 //////////////////////////////////////////////////////////////////////////////////////
 //
 // Main
@@ -119,7 +169,7 @@ fn main() {
         is_paused: false,
         is_running: false,
         updates_per_second: 10.0,
-        grid_data: GridCanvasData::new(GridNodeType::Wall(1), 50.0),
+        grid_data: GridCanvasData::new(GridNodeType::Wall(1)),
     };
 
     let mut pattern = Vector::new();
@@ -144,14 +194,12 @@ fn main() {
 }
 
 fn make_ui() -> impl Widget<AppData>{
-    let cell_size = 50.0;
-
     let snap_painter =  GridSnapPainter::default();
-    let grid = GridCanvas::new().with_id(GRID_ID).lens(AppData::grid_data);
+    let grid = GridCanvas::<GridNodeType<Net>, AppData>::new().with_id(GRID_ID).lens(AppData::grid_data);
 
     let grid_container= grid.background(snap_painter.square_grid());
 
-    let pan_control_host = ControllerHost::new(grid_container, PanningController::default());
+    let pan_control_host = ControllerHost::new(grid_container, PanController::default());
     let zoom_control_host = ControllerHost::new(pan_control_host, ZoomController::default());
 
     Flex::column()

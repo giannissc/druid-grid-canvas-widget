@@ -5,7 +5,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 use std::{marker::PhantomData};
 
-use druid::{im::{HashMap, HashSet, Vector}, Data, Rect, Point, Size, Widget, EventCtx, Event, Env, Selector, MouseButton, LifeCycleCtx, LifeCycle, UpdateCtx, LayoutCtx, BoxConstraints, PaintCtx, Affine, RenderContext, Lens};
+use druid::{im::{HashMap, HashSet, Vector}, Data, Rect, Point, Size, Widget, EventCtx, Event, Env, Selector, MouseButton, LifeCycleCtx, LifeCycle, UpdateCtx, LayoutCtx, BoxConstraints, PaintCtx, Affine, RenderContext, Lens, widget::{Label, LabelText}, Insets, Color};
 
 use crate::{GridItem, snapping::GridSnapData, save_system::SaveSystemData, StackItem, GridAction, GridState, GridIndex, canvas::Canvas,};
 
@@ -36,15 +36,20 @@ pub struct GridCanvasData<T: GridItem + PartialEq> {
 }
 
 impl<T: GridItem + PartialEq> GridCanvasData<T> {
-    pub fn new(item_type: T, cell_size: f64) -> Self {
+    pub fn new(item_type: T) -> Self {
         Self {
             action: GridAction::Dynamic,
             grid_item: item_type,
             grid: HashMap::new(),
             save_data: SaveSystemData::new(),
-            snap_data: GridSnapData::new(cell_size)
+            snap_data: GridSnapData::new(50.0),
         }
     }
+
+    pub fn with_cell_size(&mut self, cell_size: f64) {
+        self.snap_data.cell_size = cell_size;
+    }
+
     // Basic Grid methods
     fn add_node(&mut self, pos: &GridIndex, item: T) -> bool{
         let option = self.grid.get(pos);
@@ -520,5 +525,78 @@ impl<T:GridItem + PartialEq, U: Data> Widget<GridCanvasData<T>> for GridCanvas<T
                 }
             });
         }
+    }
+}
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+const LABEL_INSETS: Insets = Insets::uniform_xy(8., 2.);
+
+struct GridChild<T> {
+    label_text: Label<T>,
+    label_size: Size, // Needed to shift label to correct position when painting
+    color: Color,
+
+}
+
+impl<T:Data> GridChild<T> {
+    pub fn new(label_text: impl Into<LabelText<T>>, color: Color) -> Self {
+        // let foo = Label::new(tooltip_text).tooltip();
+        GridChild {
+            label_text: Label::new(label_text),
+            label_size: Size::ZERO,
+            color,
+        }
+    }
+}
+
+impl<T:Data> Widget<T> for GridChild<T> {
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut T, env: &Env) {
+        // Add tooltip logic on hover
+        
+    }
+
+    fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, data: &T, env: &Env) {
+        if let LifeCycle::HotChanged(_) | LifeCycle::DisabledChanged(_) = event {
+            ctx.request_paint();
+        }
+        self.label_text.lifecycle(ctx, event, data, env)
+    }
+
+    fn update(&mut self, ctx: &mut UpdateCtx, old_data: &T, data: &T, env: &Env) {
+        self.label_text.update(ctx, old_data, data, env)
+    }
+
+    fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &T, env: &Env) -> Size {
+        let padding = Size::new(LABEL_INSETS.x_value(), LABEL_INSETS.y_value());
+        let label_bc = bc.shrink(padding).loosen();
+        self.label_size = self.label_text.layout(ctx, &label_bc, data, env);
+        // HACK: to make sure we look okay at default sizes when beside a textbox,
+        // we make sure we will have at least the same height as the default textbox.
+        let min_height = 50.0;
+        let baseline = self.label_text.baseline_offset();
+        ctx.set_baseline_offset(baseline + LABEL_INSETS.y1);
+
+        let button_size = bc.constrain(Size::new(
+            self.label_size.width + padding.width,
+            (self.label_size.height + padding.height).max(min_height),
+        ));
+        button_size
+    }
+
+    fn paint(&mut self, ctx: &mut PaintCtx, data: &T, env: &Env) {
+        let is_active = ctx.is_active() && !ctx.is_disabled();
+        let is_hot = ctx.is_hot();
+        let size = ctx.size();
+
+        let rect = size.to_rect();
+
+        ctx.fill(rect, &self.color);
+
+        let label_offset = (size.to_vec2() - self.label_size.to_vec2()) / 2.0;
+
+        ctx.with_save(|ctx| {
+            ctx.transform(Affine::translate(label_offset));
+            self.label_text.paint(ctx, data, env);
+        });
     }
 }

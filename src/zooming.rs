@@ -10,6 +10,10 @@ use druid::{widget::Controller, Data, Widget, Event, Lens};
 /// ZoomData
 /// 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+pub trait ZoomDataAccess {
+    fn get_zoom_scale(&self) -> f64;
+    fn set_zoom_scale(&mut self, scale: f64);
+}
 
 #[derive(Clone, Data, Lens, PartialEq)]
 pub struct ZoomData {
@@ -19,6 +23,16 @@ pub struct ZoomData {
 impl ZoomData {
     pub fn new() -> Self {
         Self { zoom_scale: 1.0 }
+    }
+}
+
+impl ZoomDataAccess for ZoomData {
+    fn get_zoom_scale(&self) -> f64 {
+        self.zoom_scale
+    }
+
+    fn set_zoom_scale(&mut self, scale: f64) {
+        self.zoom_scale = scale;
     }
 }
 
@@ -53,11 +67,12 @@ impl Default for ZoomController {
     }
 }
 
-impl<W: Widget<ZoomData>> Controller<ZoomData, W> for ZoomController {
-    fn event(&mut self, child: &mut W, ctx: &mut druid::EventCtx, event: &Event, data: &mut ZoomData, env: &druid::Env) {
+impl<T: Data + ZoomDataAccess, W: Widget<T>> Controller<T, W> for ZoomController {
+    fn event(&mut self, child: &mut W, ctx: &mut druid::EventCtx, event: &Event, data: &mut T, env: &druid::Env) {
         match event {
             Event::Wheel(wheel) if wheel.mods.ctrl() => {
-                let mut current_zoom_scale = data.zoom_scale;
+                // let mut current_zoom_scale = data.zoom_scale;
+                let mut current_zoom_scale = data.get_zoom_scale();
                 if wheel.wheel_delta.y < 0.0 && current_zoom_scale < self.max_zoom_scale {
                      current_zoom_scale += self.zoom_step;
                     
@@ -71,7 +86,8 @@ impl<W: Widget<ZoomData>> Controller<ZoomData, W> for ZoomController {
                         current_zoom_scale = self.min_zoom_scale
                     }
                 }
-                data.zoom_scale = current_zoom_scale;
+                // data.zoom_scale = current_zoom_scale;
+                data.set_zoom_scale(current_zoom_scale)
                 // println!("Zoom scale: {:?}", current_zoom_scale);
             },
 
