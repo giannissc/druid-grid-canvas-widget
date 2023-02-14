@@ -101,7 +101,8 @@ pub trait GridItem: Copy + Clone + Hash + Eq{
     fn can_add(&self, other: Option<&Self>) -> bool;
     fn can_remove(&self) -> bool;
     fn can_move(&self, other: Option<&Self>) -> bool;
-    fn get_color(&self) -> &Color;
+    fn get_color(&self) -> Color;
+    fn get_short_text(&self) -> String;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

@@ -52,18 +52,6 @@ impl GridNodeType<Net> {
 }
 
 impl GridItem for GridNodeType<Net> {
-
-    fn get_color(&self) -> &Color {
-        match self{
-            GridNodeType::Wall(_) => &black::LICORICE,
-            GridNodeType::StartNode(_) => &blue::ARGENTINIAN_BLUE,
-            GridNodeType::TargetNode(_) => &purple::PURPUREUS,
-            GridNodeType::UnexploredNode(_) => &yellow::YELLOW_AMBER,
-            GridNodeType::ExploredNode(_) => &brown::MAROON,
-            GridNodeType::ChosenPath(_) => &green::ASH_GRAY,
-        }
-    }
-
     fn can_add(&self, other: Option<&Self>) -> bool {
         match other {
             None => true,
@@ -79,6 +67,28 @@ impl GridItem for GridNodeType<Net> {
         match other {
             None => true,
             Some(_) => false,
+        }
+    }
+
+    fn get_color(&self) -> Color {
+        match self{
+            GridNodeType::Wall(_) => black::LICORICE,
+            GridNodeType::StartNode(_) => blue::ARGENTINIAN_BLUE,
+            GridNodeType::TargetNode(_) => purple::PURPUREUS,
+            GridNodeType::UnexploredNode(_) => yellow::YELLOW_AMBER,
+            GridNodeType::ExploredNode(_) => brown::MAROON,
+            GridNodeType::ChosenPath(_) => green::ASH_GRAY,
+        }
+    }
+
+    fn get_short_text(&self) -> String {
+        match self{
+            GridNodeType::Wall(net) => "Net 1".into(),
+            GridNodeType::StartNode(net) => format!("{:?}", net),
+            GridNodeType::TargetNode(net) => format!("{:?}", net),
+            GridNodeType::UnexploredNode(net) => format!("{:?}", net),
+            GridNodeType::ExploredNode(net) => format!("{:?}", net),
+            GridNodeType::ChosenPath(net) => format!("{:?}", net),
         }
     }
 }
@@ -195,7 +205,7 @@ fn main() {
 
 fn make_ui() -> impl Widget<AppData>{
     let snap_painter =  GridSnapPainter::default();
-    let grid = GridCanvas::<GridNodeType<Net>, AppData>::new().with_id(GRID_ID).lens(AppData::grid_data);
+    let grid = GridCanvas::<GridNodeType<Net>>::new().with_id(GRID_ID).lens(AppData::grid_data);
 
     let grid_container= grid.background(snap_painter.square_grid());
 

@@ -1,5 +1,4 @@
 //! A widget that allows for arbitrary layout of it's children.
-use std::borrow::{BorrowMut, Borrow};
 use std::hash::Hash;
 
 use druid::im::HashMap;
@@ -15,10 +14,16 @@ use druid::{
 ///
 ///[`CanvasLayout`]: trait.CanvasLayout.html
 ///[`CanvasWrap`]: struct.CanvasWrap.html
-pub struct Canvas<T>
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+/// 
+/// Canvas Widget
+/// 
+/////////////////////////////////////////////////////////////////////////////////////////////////////
+pub struct Canvas<T: Data>
 {
-    children: Vec<Box<dyn Positioned<T>>>,
-    position_map: HashMap<RectInt, usize>,
+    children: Vec<Child<T>>,
+    position_map: HashMap<PointKey, usize>,
     id_map: HashMap<WidgetId, usize>,
 }
 
@@ -40,21 +45,26 @@ impl<T: Data> Canvas<T>
         }
     }
 
-    pub fn add_child(&mut self, ctx: &mut EventCtx, child: impl Positioned<T> + 'static, to: RectInt) where
-    dyn Positioned<T> : Widget<T> {
-        let index = self.position_map.remove(&to);
+    // For index based layout containers the position will be replaced by an index
+    // Might need two variants for this: add and add_relocate in case you don't want 
+    // to remove the the exist at the to position. Useful for drag and drop between
+    // different containers
+    // A third method
+    pub fn add_child(&mut self, ctx: &mut EventCtx, child: impl Widget<T> + 'static, from: PointKey) {
+        let index = self.position_map.remove(&from);
         
         if let Some(index) = index {
             self.children.remove(index);
         }
 
         let index = self.children.len();
-        self.children.insert(index, Box::new(child));
-        self.position_map.insert(to, index);
+        self.children.insert(index, Child::Explicit { inner: WidgetPod::new(Box::new(child)), position: from.clone().into()});
+        self.position_map.insert(from, index);
         ctx.children_changed();
     }
 
-    pub fn remove_child(&mut self, ctx: &mut EventCtx, from: RectInt){
+    // For index based layout containers the position will be replaced by an index
+    pub fn remove_child(&mut self, ctx: &mut EventCtx, from: PointKey){
         let index = self.position_map.remove(&from);
         if let Some(index) = index {
             self.children.remove(index);
@@ -62,21 +72,29 @@ impl<T: Data> Canvas<T>
         }
     }
 
-    pub fn move_child(&mut self, ctx: &mut EventCtx, from: RectInt, to: RectInt){
+    // For index based layout containers the position will be replaced by an index
+    // Might need two variants for this: move and move_relocate in case you don't want 
+    // to remove the the exist at the to position. Useful for drag and drop within the 
+    // same container
+    pub fn move_child(&mut self, ctx: &mut EventCtx, from: PointKey, to: PointKey){
         let index_from = self.position_map.remove(&from);
         let index_to = self.position_map.remove(&to);
         
         if let Some(index) = index_to {
+            println!("Child removed at target positioned");
             self.children.remove(index);
         }
 
         if let Some(index) = index_from {
+            println!("Location updated");
             self.position_map.insert(to, index);
         }
         ctx.children_changed();
     }
 
-    pub fn exchange_child(&mut self, ctx: &mut EventCtx, from: RectInt, to: RectInt){
+    // For index based layout containers the position will be replaced by an index
+    // Can be useful for drag and drop operations within the same container
+    pub fn exchange_child(&mut self, ctx: &mut EventCtx, from: PointKey, to: PointKey){
         let index_from = self.position_map.remove(&from);
         let index_to = self.position_map.remove(&to);
         if let (Some(index_from), Some(index_to)) = (index_from, index_to) {
@@ -87,14 +105,14 @@ impl<T: Data> Canvas<T>
         ctx.children_changed();
     }
 
-    pub fn children_mut(&mut self, ctx: &mut EventCtx) -> &mut Vec<Box<dyn Positioned<T>>> {
-        ctx.children_changed();
-        self.children.borrow_mut()
-    }
+    // pub fn children_mut(&mut self, ctx: &mut EventCtx) -> &mut Vec<WidgetPod<T, Box<dyn Widget<T>>>> {
+    //     ctx.children_changed();
+    //     self.children.borrow_mut()
+    // }
     
-    pub fn children(&self) -> &Vec<Box<dyn Positioned<T>>> {
-        self.children.borrow()
-    }
+    // pub fn children(&self) -> &Vec<WidgetPod<T, Box<dyn Widget<T>>>> {
+    //     self.children.borrow()
+    // }
 
 }
 
@@ -103,20 +121,21 @@ impl<T: Data> Widget<T> for Canvas<T>
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut T, env: &Env) {
         //we're letting their own filtering handle event filtering
         //we may want to revisit that decision
-        for child in self.children.iter_mut() {
-            child.event(ctx, event, data, env);
-        }
+        // for child in self.children.iter_mut().filter_map(|x| x.widget_mut()) {
+        //     child.event(ctx, event, data, env);
+        // }
     }
 
     fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, data: &T, env: &Env) {
-        for child in self.children.iter_mut() {
+        println!("Canvas Parent ({:?}) Lifecycle: {:?}", ctx.widget_id(),event);
+        for child in self.children.iter_mut().filter_map(|x| x.widget_mut()) {
             child.lifecycle(ctx, event, data, env);
         }
     }
 
-    fn update(&mut self, ctx: &mut UpdateCtx, old_data: &T, data: &T, env: &Env) {
-        for child in self.children.iter_mut() {
-            child.update(ctx, old_data, data, env);
+    fn update(&mut self, ctx: &mut UpdateCtx, _old_data: &T, data: &T, env: &Env) {
+        for child in self.children.iter_mut().filter_map(|x| x.widget_mut()) {
+            child.update(ctx, data, env);
         }
     }
 
@@ -124,10 +143,9 @@ impl<T: Data> Widget<T> for Canvas<T>
         let mut temp = HashMap::new();
 
         for (index, child) in self.children.iter_mut().enumerate() {
-            let (origin, size) = child.positioned_layout(ctx, data, env);
-            let origin: PointInt = origin.into();
-            let size: SizeInt = size.into();
-            temp.insert(RectInt::new(origin, size), index);
+            let (origin, _) = child.positioned_layout(ctx, data, env);
+            child.widget_mut().unwrap().set_origin(ctx, data, env, origin);
+            temp.insert(origin.into(), index);
         }
 
         self.position_map = temp;
@@ -146,128 +164,97 @@ impl<T: Data> Widget<T> for Canvas<T>
     fn paint(&mut self, ctx: &mut PaintCtx, data: &T, env: &Env) {
         //TODO: filter painting based on our extents? (don't draw widgets entirely outside our bounds?)
         //It's the main reason we keep and update the rect
-        for child in self.children.iter_mut() {
+        for child in self.children.iter_mut().filter_map(|x| x.widget_mut()) {
             child.paint(ctx, data, env);
         }
     }
 }
 
-pub struct CanvasChildWrap<W: Widget<T>, T: Data, F: Fn(&T) -> Point> {
-    inner: WidgetPod<T, W>,
-    closure: F,
-}
-impl<W: Widget<T>, T: Data, F: Fn(&T) -> Point> CanvasChildWrap<W, T, F> {
-    pub fn new(widget: W, closure: F) -> Self {
-        Self {
-            inner: WidgetPod::new(widget),
-            closure,
-        }
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+/// 
+/// Canvas Child Wrap
+/// 
+/////////////////////////////////////////////////////////////////////////////////////////////////////
+pub enum Child<T: Data> {
+    Implicit {
+        inner: WidgetPod<T, Box<dyn Widget<T>>>,
+        closure: Box<dyn Fn(&T) -> Point>,
+    },
+    Explicit {
+        inner: WidgetPod<T, Box<dyn Widget<T>>>,
+        position: Point,
     }
 }
 
-impl<W: Widget<T>, T: Data, F: Fn(&T) -> Point> Positioned<T> for CanvasChildWrap<W, T, F> {
+impl<T: Data> Child<T> {
+    fn widget_mut(&mut self) -> Option<&mut WidgetPod<T, Box<dyn Widget<T>>>> {
+        match self {
+            Child::Explicit { inner, ..} | Child::Implicit { inner, ..} => Some(inner),
+        }
+    }
+
+    fn widget(&self) -> Option<&WidgetPod<T, Box<dyn Widget<T>>>> {
+        match self {
+            Child::Explicit { inner, ..} | Child::Implicit { inner, ..} => Some(inner),
+        }
+    }
+
     fn positioned_layout(&mut self, ctx: &mut LayoutCtx, data: &T, env: &Env) -> (Point, Size) {
-        let desired_origin = (self.closure)(data);
-        let desired_size = self.inner.layout(
-            ctx,
-            &BoxConstraints::new(Size::ZERO, Size::new(f64::INFINITY, f64::INFINITY)),
-            data,
-            env,
-        );
-        println!("{:?} {:?}", desired_origin, desired_size);
-
-        let point: Point = desired_origin.clone().into();
-        self.inner.set_layout_rect(
-            ctx,
-            data,
-            env,
-            Rect::from_origin_size(point, desired_size),
-        );
-        (desired_origin, desired_size)
-    }
-}
-
-impl<W: Widget<T>, T: Data, F: Fn(&T) -> Point> Widget<T> for CanvasChildWrap<W, T, F> {
-    fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut T, env: &Env) {
-        self.inner.event(ctx, event, data, env);
-    }
-
-    fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, data: &T, env: &Env) {
-        self.inner.lifecycle(ctx, event, data, env);
-    }
-
-    fn update(&mut self, ctx: &mut UpdateCtx, old_data: &T, data: &T, env: &Env) {
-        self.inner.update(ctx, data, env);
-        if (self.closure)(data) != (self.closure)(old_data) {
-            ctx.request_layout();
-            //println!("Repaint requested");
-        }
-    }
-
-    //NOTE: This is not called when we're being laid out on a canvas, so we act transparently.
-    fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &T, env: &Env) -> Size {
-        self.inner.layout(ctx, bc, data, env)
-    }
-
-    fn paint(&mut self, paint_ctx: &mut PaintCtx, data: &T, env: &Env) {
-        self.inner.paint(paint_ctx, data, env);
-    }
-}
-
-///
-pub trait Positioned<T>: Widget<T> {
-    fn positioned_layout(&mut self, ctx: &mut LayoutCtx, data: &T, env: &Env) -> (Point, Size);
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////
-/// 
-/// 
-/// 
-///////////////////////////////////////////////////////////////////////////////////////////////
-#[derive(Debug, PartialEq, Hash, Eq, Clone)]
-pub struct RectInt {
-    position: PointInt,
-    size: SizeInt,
-}
-
-impl RectInt {
-    pub const ZERO: RectInt = RectInt {
-        position: PointInt { x: 0, y: 0 },
-        size: SizeInt { width: 0, height: 0},
-    };
-    
-    pub fn new(position: PointInt, size: SizeInt) -> Self {
-        Self {
-            position,
-            size,
+        match self {
+            Child::Explicit { inner, position } => {
+                let size = inner.layout(ctx, &BoxConstraints::new(Size::ZERO, Size::new(f64::INFINITY, f64::INFINITY)), data, env);
+                (*position, size)
+            },
+            Child::Implicit { inner, closure } => {
+                let desired_origin = (closure)(data);
+                let desired_size = inner.layout(
+                    ctx,
+                    &BoxConstraints::new(Size::ZERO, Size::new(f64::INFINITY, f64::INFINITY)),
+                    data,
+                    env,
+                );
+        
+                let point: Point = desired_origin;
+                inner.set_layout_rect(
+                    ctx,
+                    data,
+                    env,
+                    Rect::from_origin_size(point, desired_size),
+                );
+                (desired_origin, desired_size)
+            }
         }
         
-
     }
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////
+/// 
+/// PointKey
+/// 
+///////////////////////////////////////////////////////////////////////////////////////////////
 #[derive(Debug, PartialEq, Hash, Eq, Clone)]
-pub struct PointInt {
+pub struct PointKey {
     /// The x coordinate.
     pub x: i32,
     /// The y coordinate.
     pub y: i32,
 }
 
-impl PointInt {
+impl PointKey {
     pub fn new(x: i32, y: i32) -> Self {
         Self { x, y}
     }
 }
 
 
-impl Default for PointInt {
+impl Default for PointKey {
     fn default() -> Self {
         Self { x: 0, y: 0 }
     }
 }
 
-impl From<Point> for PointInt {
+impl From<Point> for PointKey {
     fn from(value: Point) -> Self {
         Self {
             x: value.x as i32,
@@ -276,7 +263,7 @@ impl From<Point> for PointInt {
     }
 }
 
-impl Into<Point> for PointInt {
+impl Into<Point> for PointKey {
     fn into(self) -> Point {
         Point {
             x: self.x.into(),
@@ -285,41 +272,40 @@ impl Into<Point> for PointInt {
     }
 }
 
-#[derive(Debug, PartialEq, Hash, Eq, Clone)]
-pub struct SizeInt {
-    /// The width.
-    pub width: u32,
-    /// The height.
-    pub height: u32,
-}
+// #[derive(Debug, PartialEq, Hash, Eq, Clone)]
+// pub struct SizeInt {
+//     /// The width.
+//     pub width: u32,
+//     /// The height.
+//     pub height: u32,
+// }
 
-impl SizeInt {
-    fn new(width: u32, height: u32) -> Self {
-        Self { width, height}
-    }
-}
+// impl SizeInt {
+//     fn new(width: u32, height: u32) -> Self {
+//         Self { width, height}
+//     }
+// }
 
-impl Default for SizeInt {
-    fn default() -> Self {
-        Self { width: 0, height: 0 }
-    }
-}
+// impl Default for SizeInt {
+//     fn default() -> Self {
+//         Self { width: 0, height: 0 }
+//     }
+// }
 
-impl From<Size> for SizeInt {
-    fn from(value: Size) -> Self {
-        Self {
-            width: value.width as u32,
-            height: value.height as u32,
-        }
-    }
-}
+// impl From<Size> for SizeInt {
+//     fn from(value: Size) -> Self {
+//         Self {
+//             width: value.width as u32,
+//             height: value.height as u32,
+//         }
+//     }
+// }
 
-impl Into<Size> for SizeInt {
-    fn into(self) -> Size {
-        Size {
-            width: self.width.into(),
-            height: self.height.into(),
-        }
-    }
-}
-
+// impl Into<Size> for SizeInt {
+//     fn into(self) -> Size {
+//         Size {
+//             width: self.width.into(),
+//             height: self.height.into(),
+//         }
+//     }
+// }

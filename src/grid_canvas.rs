@@ -3,11 +3,10 @@
 /// Imports
 /// 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-use std::{marker::PhantomData};
+use druid::{im::{HashMap, HashSet, Vector}, Data, Rect, Point, Size, Widget, EventCtx, Event, Env, Selector, MouseButton, LifeCycleCtx, LifeCycle, UpdateCtx, LayoutCtx, BoxConstraints, PaintCtx, Affine, RenderContext, Lens, widget::{Label, LabelText, Button}, Insets, Color, WidgetPod};
+use druid_color_thesaurus::white;
 
-use druid::{im::{HashMap, HashSet, Vector}, Data, Rect, Point, Size, Widget, EventCtx, Event, Env, Selector, MouseButton, LifeCycleCtx, LifeCycle, UpdateCtx, LayoutCtx, BoxConstraints, PaintCtx, Affine, RenderContext, Lens, widget::{Label, LabelText}, Insets, Color};
-
-use crate::{GridItem, snapping::GridSnapData, save_system::SaveSystemData, StackItem, GridAction, GridState, GridIndex, canvas::Canvas,};
+use crate::{GridItem, snapping::GridSnapData, save_system::SaveSystemData, StackItem, GridAction, GridState, GridIndex, canvas::{Canvas,},};
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 /// 
@@ -33,6 +32,7 @@ pub struct GridCanvasData<T: GridItem + PartialEq> {
     // Data Hierarchy
     pub save_data: SaveSystemData<StackItem<T>>,
     pub snap_data: GridSnapData,
+    pub position: Point, 
 }
 
 impl<T: GridItem + PartialEq> GridCanvasData<T> {
@@ -43,6 +43,7 @@ impl<T: GridItem + PartialEq> GridCanvasData<T> {
             grid: HashMap::new(),
             save_data: SaveSystemData::new(),
             snap_data: GridSnapData::new(50.0),
+            position: Point::ZERO,
         }
     }
 
@@ -237,16 +238,15 @@ impl<T: GridItem + PartialEq> GridCanvasData<T> {
 // TODO: Keep as widget to perform scaling/translation of child children paint methods
 // TODO: Move Snapping System out of main to lib and attach to Canvas
 // TODO: Add canvas to grid widget
-pub struct GridCanvas<T, U> {
+pub struct GridCanvas<T: GridItem + PartialEq> where GridCanvasData<T>: Data {
     start_pos: GridIndex,
     state: GridState,
     // previous_stack_length: usize,
     previous_playback_index: usize,
-    canvas: Canvas<U>,
-    phantom: PhantomData<T>,
+    canvas: Canvas<GridCanvasData<T>>,
 }
 
-impl<T: Clone + GridItem, U:Data> GridCanvas<T, U> {
+impl<T: Clone + GridItem> GridCanvas<T> where GridCanvasData<T>: Data {
     pub fn new() -> Self {
         GridCanvas {
             start_pos: GridIndex { row: 0, col: 0 },
@@ -254,7 +254,6 @@ impl<T: Clone + GridItem, U:Data> GridCanvas<T, U> {
             // previous_stack_length: 0,
             previous_playback_index: 0,
             canvas: Canvas::new(),
-            phantom: PhantomData,
         }
     }
 
@@ -267,8 +266,8 @@ impl<T: Clone + GridItem, U:Data> GridCanvas<T, U> {
     }
 }
 
-impl<T:GridItem + PartialEq, U: Data> Widget<GridCanvasData<T>> for GridCanvas<T, U> {
-    fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut GridCanvasData<T>, _env: &Env) {
+impl<T:GridItem + PartialEq> Widget<GridCanvasData<T>> for GridCanvas<T> where GridCanvasData<T>: Data {
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut GridCanvasData<T>, env: &Env) {
         
         let mut change_tracker: HashSet<StackItem<T>> = HashSet::new();
 
@@ -309,8 +308,16 @@ impl<T:GridItem + PartialEq, U: Data> Widget<GridCanvasData<T>> for GridCanvas<T
                     },
                     Event::MouseDown(e) => {
                         let (row, col) = data.snap_data.get_grid_index(e.pos);
-                        let pos = GridIndex::new(row, col);
-                        let option = data.grid.get(&pos);
+                        let grid_index = GridIndex::new(row, col);
+                        let option = data.grid.get(&grid_index);
+
+                        let position = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
+                        let size = Size::new(data.snap_data.cell_size, data.snap_data.cell_size);
+
+                        // println!("Mouse Point: {:?}", e.pos);
+                        // println!("Grid Index: {:?}", grid_index);
+                        // println!("Grid Point: {:?}", position);
+
                         if self.state == GridState::Idle{
                             if e.button == MouseButton::Left{
                                 // info!("Left Click");
@@ -353,16 +360,21 @@ impl<T:GridItem + PartialEq, U: Data> Widget<GridCanvasData<T>> for GridCanvas<T
 
                         if let GridState::Running(_) = self.state{
                             if data.action == GridAction::Add {
-                                if data.add_node(&pos, data.grid_item) {
+                                if data.add_node(&grid_index, data.grid_item) {
                                     // let foo = self.canvas.add_child(ctx, child, to);
                                     change_tracker.insert(data.save_data.save_stack.last().unwrap().clone());
+                                    
+                                    let child = GridChild::new(data.grid_item.get_short_text(), data.grid_item.get_color(), size);
+                                    
+                                    self.canvas.add_child(ctx, child, position.into());
                                 }
                             } else if data.action == GridAction::Remove && option.is_some(){
-                                if data.remove_node(&pos) {
+                                if data.remove_node(&grid_index) {
                                     change_tracker.insert(data.save_data.save_stack.last().unwrap().clone());
+                                    self.canvas.remove_child(ctx, position.into());
                                 }
                             } else if data.action == GridAction::Move && option.is_some() {
-                                self.start_pos = pos;
+                                self.start_pos = grid_index;
                             }
                         }
                         // info!("Acquire State: {:?}", self.state);
@@ -377,26 +389,42 @@ impl<T:GridItem + PartialEq, U: Data> Widget<GridCanvasData<T>> for GridCanvas<T
                 match event {            
                     Event::MouseMove(e) => {
                         let (row, col) = data.snap_data.get_grid_index(e.pos);
-                        let pos = GridIndex::new(row, col);
-                        let option = data.grid.get(&pos);
+                        let grid_index = GridIndex::new(row, col);
+                        let option = data.grid.get(&grid_index);
+
+                        let position = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
+                        let size = Size::new(data.snap_data.cell_size, data.snap_data.cell_size);
+
+                        // println!("Mouse Point: {:?}", e.pos);
+                        // println!("Grid Index: {:?}", grid_index);
+                        // println!("Grid Point: {:?}", position);
+
                         match data.action{
                             GridAction::Add => {
-                                if data.add_node(&pos, data.grid_item) {
+                                if data.add_node(&grid_index, data.grid_item) {
                                     change_tracker.insert(data.save_data.save_stack.last().unwrap().clone());
+                                    let child = GridChild::new(data.grid_item.get_short_text(), data.grid_item.get_color(), size);
+                                    self.canvas.add_child(ctx, child, position.into());
                                 }                                    
                             },
                             GridAction::Move => {
-                                if self.start_pos != pos {
-                                    if data.move_node(&self.start_pos, &pos) {
+                                if self.start_pos != grid_index {
+                                    if data.move_node(&self.start_pos, &grid_index) {
                                         change_tracker.insert(data.save_data.save_stack.last().unwrap().clone());
-                                        self.start_pos = pos;
+                                        // let from = data.snap_data.get_grid_position(self.start_pos.row, self.start_pos.row).into();
+                                        // let to = data.snap_data.get_grid_position(grid_index.row, grid_index.row).into();
+                                        // println!("{:?} -> {:?}", self.start_pos, grid_index);
+                                        // println!("{:?} -> {:?}", from, to);
+                                        // self.canvas.move_child(ctx, from, to);
+                                        self.start_pos = grid_index;
                                     }
                                 }
                             },
                             GridAction::Remove => {
                                 if option.is_some(){
-                                    if data.remove_node(&pos) {
+                                    if data.remove_node(&grid_index) {
                                         change_tracker.insert(data.save_data.save_stack.last().unwrap().clone());
+                                        self.canvas.remove_child(ctx, position.into());
                                     }
                                 }        
                             },
@@ -429,8 +457,6 @@ impl<T:GridItem + PartialEq, U: Data> Widget<GridCanvasData<T>> for GridCanvas<T
             },
         }
 
-        // self.canvas.event(ctx, event, data, env);
-
         // To be removed with refactoring
         if change_tracker.len() != 0 {           
             for item in &change_tracker {
@@ -442,37 +468,38 @@ impl<T:GridItem + PartialEq, U: Data> Widget<GridCanvasData<T>> for GridCanvas<T
             change_tracker.clear();
             self.previous_playback_index = data.save_data.playback_index;
         }
+
+        self.canvas.event(ctx, event, data, env);
     }
 
-    fn lifecycle(&mut self, _ctx: &mut LifeCycleCtx, _event: &LifeCycle, _data: &GridCanvasData<T>, _env: &Env) {
-        // if let LifeCycle::WidgetAdded = event {
-        //     self.previous_stack_length = data.save_stack.len();
-        //     if data.playback_index != 0 {
-        //         ctx.submit_command(UPDATE_GRID_PLAYBACK);
-        //     }
+    fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, data: &GridCanvasData<T>, env: &Env) {
+        println!("Canvas Wrapper ({:?}) Lifecycle: {:?}", ctx.widget_id(), event);
+
+        // if let LifeCycle::Internal(RouteWidgetAdded) = event {
+        //     self.canvas.lifecycle(ctx, &LifeCycle::WidgetAdded, data, env);
         // }
+
+        self.canvas.lifecycle(ctx, event, data, env);
     }
 
-    fn update(
-        &mut self,
-        _ctx: &mut UpdateCtx,
-        _old_data: &GridCanvasData<T>,
-        _data: &GridCanvasData<T>,
-        _env: &Env,
-    ) {       
+    fn update(&mut self, ctx: &mut UpdateCtx, old_data: &GridCanvasData<T>, data: &GridCanvasData<T>, env: &Env){
+        // println!("Canvas Wrapper Update");
+        // self.canvas.update(ctx, data, env);
+        self.canvas.update(ctx, old_data, data, env);
+        
     }
 
-    fn layout(
-        &mut self,
-        _ctx: &mut LayoutCtx,
-        bc: &BoxConstraints,
-        _data: &GridCanvasData<T>,
-        _env: &Env,
-    ) -> Size {
-        let width = bc.max().width;
-        let height = bc.max().height;
+    fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &GridCanvasData<T>, env: &Env) -> Size {
+        // println!("Canvas Wrapper Layout");
+        let origin = Point::new(0., 0.);
         //debug!("Box constraints width: {:?}", bc.max().width);
         //debug!("Box constraints height: {:?}", bc.max().height);
+        self.canvas.layout(ctx, bc, data, env);
+        // self.canvas.set_origin(ctx, data, env, origin);
+
+
+        let width = bc.max().width;
+        let height = bc.max().height;
 
         Size {
             width: width,
@@ -480,71 +507,52 @@ impl<T:GridItem + PartialEq, U: Data> Widget<GridCanvasData<T>> for GridCanvas<T
         }
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx, data: &GridCanvasData<T>, _env: &Env) {
+    fn paint(&mut self, ctx: &mut PaintCtx, data: &GridCanvasData<T>, env: &Env) {
+        // println!("Canvas Wrapper Paint");
         //debug!("Running paint method");
         // Draw grid cells
         let damage_region = ctx.region().clone();
 
-        // println!("Canvas Screen Space: {:?}", screen_space);
-        // println!("Canvas Damage Region: {:?}\n", damage_region);
-
         // Calculate area to render
         let paint_rectangles = damage_region.rects();
 
-        for paint_rect in paint_rectangles.iter() {
-            let (row, col) =  data.snap_data.get_grid_index(paint_rect.origin());
-            let from_grid_pos: GridIndex = GridIndex::new(row, col);
-            let from_row = from_grid_pos.row;
-            let from_col = from_grid_pos.col;
+        let size = ctx.size();
 
-            let (row, col) =  data.snap_data.get_grid_index(Point::new(paint_rect.max_x(), paint_rect.max_y()));
-            let to_grid_pos = GridIndex::new(row, col);
-            let to_row = to_grid_pos.row;
-            let to_col = to_grid_pos.col;
+        ctx.with_save(|ctx| {
+            let translate = Affine::translate(data.snap_data.pan_data.absolute_offset.to_vec2());
+            let scale = Affine::scale(data.snap_data.zoom_data.zoom_scale);
+            
+            ctx.transform(translate);
+            ctx.transform(scale);
 
-            //debug!("Bounding box with origin {:?} and dimensions {:?} × {:?}", paint_rect.origin(), paint_rect.width(), paint_rect.height());
-            //debug!("Paint from row: {:?} to row {:?}", from_row, to_row);
-            //debug!("Paint from col: {:?} to col {:?}", from_col, to_col);
-
-            // Partial Area Paint Logic
-            ctx.with_save(|ctx| {
-                let translate = Affine::translate(data.snap_data.pan_data.absolute_offset.to_vec2());
-                let scale = Affine::scale(data.snap_data.zoom_data.zoom_scale);
-                ctx.transform(translate);
-                ctx.transform(scale);
-
-                for row in from_row..=to_row {
-                    for col in from_col..=to_col {
-                        let grid_pos = GridIndex { row, col };
-                        let rect = self.invalidation_area(grid_pos, data.snap_data.cell_size);
-
-                        if let Some(item) = data.grid.get(&grid_pos){
-                            ctx.fill(rect, item.get_color());
-                        }
-                    }
-                }
-            });
-        }
+            // self.canvas.paint_always(ctx, data, env);
+            self.canvas.paint(ctx, data, env);
+        });
     }
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-const LABEL_INSETS: Insets = Insets::uniform_xy(8., 2.);
+const LABEL_INSETS: Insets = Insets::uniform_xy(1., 1.);
 
 struct GridChild<T> {
     label_text: Label<T>,
     label_size: Size, // Needed to shift label to correct position when painting
     color: Color,
-
+    size: Size,
 }
 
 impl<T:Data> GridChild<T> {
-    pub fn new(label_text: impl Into<LabelText<T>>, color: Color) -> Self {
+    pub fn new(text: impl Into<LabelText<T>>, color: Color, size: Size) -> Self {
         // let foo = Label::new(tooltip_text).tooltip();
+        let mut label_text = Label::new("123");
+        label_text.set_text_color(white::ALABASTER);
+        label_text.set_text_size(16.);
+
         GridChild {
-            label_text: Label::new(label_text),
+            label_text,
             label_size: Size::ZERO,
             color,
+            size,
         }
     }
 }
@@ -556,38 +564,39 @@ impl<T:Data> Widget<T> for GridChild<T> {
     }
 
     fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, data: &T, env: &Env) {
+        println!("Canvas Child Lifecycle: {:?}", event);
+
         if let LifeCycle::HotChanged(_) | LifeCycle::DisabledChanged(_) = event {
             ctx.request_paint();
         }
-        self.label_text.lifecycle(ctx, event, data, env)
+
+        if let LifeCycle::Internal(RouteWidgetAdded) = event {
+            self.label_text.lifecycle(ctx, &LifeCycle::WidgetAdded, data, env);
+        }
+
+        self.label_text.lifecycle(ctx, event, data, env);
     }
 
     fn update(&mut self, ctx: &mut UpdateCtx, old_data: &T, data: &T, env: &Env) {
-        self.label_text.update(ctx, old_data, data, env)
+        self.label_text.update(ctx, old_data, data, env);
     }
 
     fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &T, env: &Env) -> Size {
         let padding = Size::new(LABEL_INSETS.x_value(), LABEL_INSETS.y_value());
         let label_bc = bc.shrink(padding).loosen();
         self.label_size = self.label_text.layout(ctx, &label_bc, data, env);
-        // HACK: to make sure we look okay at default sizes when beside a textbox,
-        // we make sure we will have at least the same height as the default textbox.
-        let min_height = 50.0;
         let baseline = self.label_text.baseline_offset();
         ctx.set_baseline_offset(baseline + LABEL_INSETS.y1);
-
-        let button_size = bc.constrain(Size::new(
-            self.label_size.width + padding.width,
-            (self.label_size.height + padding.height).max(min_height),
-        ));
-        button_size
+        let actual_size = bc.constrain(self.size);
+        actual_size
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, data: &T, env: &Env) {
         let is_active = ctx.is_active() && !ctx.is_disabled();
         let is_hot = ctx.is_hot();
         let size = ctx.size();
-
+        // A hack to get it to do the right thing
+        // let rect = Rect::from_origin_size(self.position, self.size);
         let rect = size.to_rect();
 
         ctx.fill(rect, &self.color);

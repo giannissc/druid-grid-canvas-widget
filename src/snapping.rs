@@ -43,7 +43,7 @@ impl GridSnapData {
     }
     pub fn move_to_grid_position_2(&self, desired_position: Point) -> Point {
         let (row, col) = self.get_grid_index(desired_position);
-        self.get_grid_position(row, col)
+        self.get_opt_grid_position(row, col)
     }
 
     pub fn get_grid_index(&self, position: Point) -> (isize, isize) {
@@ -60,12 +60,19 @@ impl GridSnapData {
         (row, col)
     }
 
-    pub fn get_grid_position(&self, row: isize, col:isize) -> Point {
+    pub fn get_opt_grid_position(&self, row: isize, col:isize) -> Point {
         let scaled_cell_size = self.cell_size * self.zoom_data.zoom_scale;
 
         Point { 
             x: col as f64 * scaled_cell_size + self.pan_data.absolute_offset.x, 
             y: row as f64 * scaled_cell_size + self.pan_data.absolute_offset.y, 
+        }
+    }
+
+    pub fn get_grid_position(&self, row: isize, col:isize) -> Point {
+        Point {
+            x: col as f64 * self.cell_size,
+            y: row as f64 * self.cell_size
         }
     }
 }
