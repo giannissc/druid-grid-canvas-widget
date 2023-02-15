@@ -28,7 +28,7 @@ pub type Net = i32;
 //type Weight = i32;
 #[derive(Data, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Hash)]
 pub enum GridNodeType<Net> {
-    Wall(Net),
+    Wall,
     //WeightedNode(Weight),
     StartNode(Net),
     TargetNode(Net),
@@ -41,7 +41,7 @@ pub enum GridNodeType<Net> {
 impl GridNodeType<Net> {
     fn get_net(&self) -> &Net{
         match self{
-            Self::Wall(net) => net,
+            Self::Wall => &0,
             Self::StartNode(net) => net,
             Self::TargetNode(net) => net,
             Self::UnexploredNode(net) => net,
@@ -72,7 +72,7 @@ impl GridItem for GridNodeType<Net> {
 
     fn get_color(&self) -> Color {
         match self{
-            GridNodeType::Wall(_) => black::LICORICE,
+            GridNodeType::Wall => black::LICORICE,
             GridNodeType::StartNode(_) => blue::ARGENTINIAN_BLUE,
             GridNodeType::TargetNode(_) => purple::PURPUREUS,
             GridNodeType::UnexploredNode(_) => yellow::YELLOW_AMBER,
@@ -83,7 +83,7 @@ impl GridItem for GridNodeType<Net> {
 
     fn get_short_text(&self) -> String {
         match self{
-            GridNodeType::Wall(net) => "Wall".into(),
+            GridNodeType::Wall => "Wall".into(),
             GridNodeType::StartNode(net) => format!("{:?}", net),
             GridNodeType::TargetNode(net) => format!("{:?}", net),
             GridNodeType::UnexploredNode(net) => format!("{:?}", net),
@@ -179,15 +179,15 @@ fn main() {
         is_paused: false,
         is_running: false,
         updates_per_second: 10.0,
-        grid_data: GridCanvasData::new(GridNodeType::Wall(5)),
+        grid_data: GridCanvasData::new(GridNodeType::Wall),
     };
 
     let mut pattern = Vector::new();
-    pattern.push_back(StackItem::Add(GridIndex{row:0, col:0}, GridNodeType::Wall(1), None));
-    pattern.push_back(StackItem::Add(GridIndex{row:0, col:1}, GridNodeType::Wall(1), None));
-    pattern.push_back(StackItem::Add(GridIndex{row:0, col:2}, GridNodeType::Wall(1), None));
-    pattern.push_back(StackItem::Add(GridIndex{row:1, col:0}, GridNodeType::Wall(1), None));
-    pattern.push_back(StackItem::Add(GridIndex{row:2, col:0}, GridNodeType::Wall(1), None));
+    pattern.push_back(StackItem::Add(GridIndex{row:0, col:0}, GridNodeType::Wall, None));
+    pattern.push_back(StackItem::Add(GridIndex{row:0, col:1}, GridNodeType::Wall, None));
+    pattern.push_back(StackItem::Add(GridIndex{row:0, col:2}, GridNodeType::Wall, None));
+    pattern.push_back(StackItem::Add(GridIndex{row:1, col:0}, GridNodeType::Wall, None));
+    pattern.push_back(StackItem::Add(GridIndex{row:2, col:0}, GridNodeType::Wall, None));
     data.grid_data.submit_to_stack_and_process(pattern);
     // data.grid_data.submit_to_stack(pattern);
     AppLauncher::with_window(main_window)
