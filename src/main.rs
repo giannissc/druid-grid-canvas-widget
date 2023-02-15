@@ -242,7 +242,7 @@ fn make_grid_options() -> impl Widget<AppData>{
                     data.grid_data.save_data.redo();
                     ctx.submit_command(Command::new(UPDATE_GRID_PLAYBACK, (), Target::Widget(GRID_ID)));
                 }))
-                .with_child(Button::new("Clear").lens(AppData::grid_data).on_click(|ctx, data, _env|{
+                .with_child(Button::new("Clear").lens(AppData::grid_data).on_click(|_ctx, data, _env|{
                     data.grid_data.clear_all();
                 }))
         )
