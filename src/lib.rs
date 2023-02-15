@@ -4,8 +4,11 @@
 /// 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 use std::hash::Hash;
-use druid::{Data, Color,};
+use std::fmt::Debug;
+use canvas::Canvas;
+use druid::{Data, Color, Size,};
 use druid::im::{HashMap, HashSet};
+use grid_canvas::{GridCanvasData, GridChild};
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 /// 
@@ -146,7 +149,7 @@ pub enum StackItem<T: GridItem>{
     BatchRemove(HashMap<GridIndex, T>),
 }
 
-impl<T: GridItem> StackItem<T>{
+impl<T: GridItem + Debug> StackItem<T> where GridCanvasData<T>: Data{
     fn get_positions(&self) -> HashSet<GridIndex>{
         let mut set: HashSet<GridIndex> = HashSet::new();
         
@@ -171,51 +174,90 @@ impl<T: GridItem> StackItem<T>{
         set
     }
 
-    fn forward(&self, grid: &mut HashMap<GridIndex, T>){
+    fn forward(&self, grid: &mut HashMap<GridIndex, T>, canvas: &mut Canvas<GridCanvasData<T>>, data: GridCanvasData<T>){
+        let size = Size::new(data.snap_data.cell_size, data.snap_data.cell_size);
         match self{
-            StackItem::Add(pos, current_item, _) => {grid.insert(*pos, *current_item);},
-            StackItem::Remove(pos, _) => {grid.remove(pos);},
-            StackItem::Move(from, to, item) => {
-                grid.remove(from);
-                grid.insert(*to, *item);
+            StackItem::Add(grid_index, current_item, _) => {
+                grid.insert(*grid_index, *current_item);
+                let from = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
+                let child = GridChild::new(current_item.get_short_text(), current_item.get_color(), size);
+                canvas.add_child(child, from.into());
+            },
+            StackItem::Remove(grid_index, _) => {
+                grid.remove(grid_index);
+                let from = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
+                canvas.remove_child(from.into());
+            },
+            StackItem::Move(from_index, to_index, item) => {
+                grid.remove(from_index);
+                grid.insert(*to_index, *item);
+                let from = data.snap_data.get_grid_position(from_index.row, from_index.col);
+                let to = data.snap_data.get_grid_position(to_index.row, to_index.col);
+                canvas.move_child(from.into(), to.into());
             },
             StackItem::BatchAdd(items) => {
-                for (key, (current_item, _)) in items {
-                    grid.insert(*key, *current_item);
+                for (grid_index, (current_item, _)) in items {
+                    grid.insert(*grid_index, *current_item);
+                    let child = GridChild::new(current_item.get_short_text(), current_item.get_color(), size);
+                    let from = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
+                    canvas.add_child(child, from.into());
                 }
             },
             StackItem::BatchRemove(items) => {
-                for (key, _) in items {
-                    grid.remove(key);
+                for (grid_index, _) in items {
+                    grid.remove(grid_index);
+                    let from = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
+                    canvas.remove_child(from.into());
                 }
             }
         }
     }
 
-    fn reverse(&self, grid: &mut HashMap<GridIndex, T>){
+    fn reverse(&self, grid: &mut HashMap<GridIndex, T>, canvas: &mut Canvas<GridCanvasData<T>>, data: GridCanvasData<T>){
+        let size = Size::new(data.snap_data.cell_size, data.snap_data.cell_size);
+        
         match self{
-            StackItem::Add(pos, _, previous_item) => {
-                grid.remove(pos);
-                if let Some(previous_node) = previous_item {
-                    grid.insert(*pos, *previous_node);
+            StackItem::Add(grid_index, _, previous_item) => {
+                grid.remove(grid_index);
+                let from = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
+                canvas.remove_child(from.into());
+                if let Some(previous_item) = previous_item {
+                    let child = GridChild::new(previous_item.get_short_text(), previous_item.get_color(), size);
+                    grid.insert(*grid_index, *previous_item);
+                    canvas.add_child(child, from.into())
                 }
             },
-            StackItem::Remove(pos, item) => {grid.insert(*pos, *item);},
-            StackItem::Move(from, to, item) => {
-                grid.remove(to);
-                grid.insert(*from, *item);
+            StackItem::Remove(grid_index, previous_item) => {
+                grid.insert(*grid_index, *previous_item);
+                let from = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
+                let child = GridChild::new(previous_item.get_short_text(), previous_item.get_color(), size);
+                canvas.add_child(child, from.into())
+            },
+            StackItem::Move(from_index, to_index, item) => {
+                grid.remove(to_index);
+                grid.insert(*from_index, *item);
+                let from = data.snap_data.get_grid_position(from_index.row, from_index.col);
+                let to = data.snap_data.get_grid_position(to_index.row, to_index.col);
+                canvas.move_child(from.into(), to.into())
             }
             StackItem::BatchAdd(items) => {
-                for (pos, (_, previous_item)) in items {
-                    grid.remove(pos);
-                    if let Some(previous_node) = previous_item {
-                        grid.insert(*pos, *previous_node);
+                for (grid_index, (_, previous_item)) in items {
+                    let from = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
+                    grid.remove(grid_index);
+                    canvas.remove_child(from.into());
+                    if let Some(previous_item) = previous_item {
+                        grid.insert(*grid_index, *previous_item);
+                        let child = GridChild::new(previous_item.get_short_text(), previous_item.get_color(), size);
+                        canvas.add_child(child, from.into())
                     }
                 }
             },
             StackItem::BatchRemove(items) => {
-                for (pos, item) in items {
-                    grid.insert(*pos, *item);
+                for (grid_index, previous_item) in items {
+                    grid.insert(*grid_index, *previous_item);
+                    let from = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
+                    let child = GridChild::new(previous_item.get_short_text(), previous_item.get_color(), size);
+                    canvas.add_child(child, from.into());
                 }
             }
         }
