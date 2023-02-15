@@ -83,7 +83,7 @@ impl GridItem for GridNodeType<Net> {
 
     fn get_short_text(&self) -> String {
         match self{
-            GridNodeType::Wall(net) => "Net 1".into(),
+            GridNodeType::Wall(net) => "Wall".into(),
             GridNodeType::StartNode(net) => format!("{:?}", net),
             GridNodeType::TargetNode(net) => format!("{:?}", net),
             GridNodeType::UnexploredNode(net) => format!("{:?}", net),
@@ -179,7 +179,7 @@ fn main() {
         is_paused: false,
         is_running: false,
         updates_per_second: 10.0,
-        grid_data: GridCanvasData::new(GridNodeType::Wall(1)),
+        grid_data: GridCanvasData::new(GridNodeType::Wall(5)),
     };
 
     let mut pattern = Vector::new();
@@ -188,8 +188,8 @@ fn main() {
     pattern.push_back(StackItem::Add(GridIndex{row:0, col:2}, GridNodeType::Wall(1), None));
     pattern.push_back(StackItem::Add(GridIndex{row:1, col:0}, GridNodeType::Wall(1), None));
     pattern.push_back(StackItem::Add(GridIndex{row:2, col:0}, GridNodeType::Wall(1), None));
-    data.grid_data.submit_to_stack(pattern);
-
+    data.grid_data.submit_to_stack_and_process(pattern);
+    // data.grid_data.submit_to_stack(pattern);
     AppLauncher::with_window(main_window)
         .configure_env(|env, _| {
             env.set(theme::SELECTION_TEXT_COLOR, Color::rgb8(0xA6, 0xCC, 0xFF));
@@ -234,13 +234,16 @@ fn make_grid_options() -> impl Widget<AppData>{
         .with_child(
             Flex::row()
                 .with_child(Label::new("Playback: "))
+                .with_child(Button::new("Previous").lens(AppData::grid_data).on_click(|ctx, data, _env|{
+                    data.grid_data.save_data.undo();
+                    ctx.submit_command(Command::new(UPDATE_GRID_PLAYBACK, (), Target::Widget(GRID_ID)));
+                }))
                 .with_child(Button::new("Next").lens(AppData::grid_data).on_click(|ctx, data, _env|{
                     data.grid_data.save_data.redo();
                     ctx.submit_command(Command::new(UPDATE_GRID_PLAYBACK, (), Target::Widget(GRID_ID)));
                 }))
-                .with_child(Button::new("Previous").lens(AppData::grid_data).on_click(|ctx, data, _env|{
-                    data.grid_data.save_data.undo();
-                    ctx.submit_command(Command::new(UPDATE_GRID_PLAYBACK, (), Target::Widget(GRID_ID)));
+                .with_child(Button::new("Clear").lens(AppData::grid_data).on_click(|ctx, data, _env|{
+                    data.grid_data.clear_all();
                 }))
         )
         .with_child(
