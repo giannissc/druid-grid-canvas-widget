@@ -73,10 +73,12 @@ impl<T: Clone + Debug> SaveSystemData<T> {
         }
     }
     
+    #[allow(dead_code)]
     fn save(&mut self){
         todo!()
     }
 
+    #[allow(dead_code)]
     fn restore(&mut self){
         todo!()
     }

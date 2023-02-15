@@ -147,7 +147,7 @@ impl<T: Data + PanDataAccess, W: Widget<T>> Controller<T, W> for PanController {
                     ctx.resign_focus();
                     self.start_mouse_position = None;
                     // debug!("Finish offset: {:?}", data.absolute_offset);
-                    // debug!("Release delta: {:?}\n", release_delta);
+                    debug!("Release delta: {:?}\n", release_delta);
                 }
             }
             _ => {}

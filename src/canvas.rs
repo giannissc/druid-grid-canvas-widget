@@ -20,6 +20,7 @@ use druid_widget_nursery::WidgetExt;
 /// Canvas Widget
 /// 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
+#[allow(dead_code)]
 pub struct Canvas<T: Data>
 {
     children: Vec<Child<T>>,
@@ -117,7 +118,7 @@ impl<T: Data> Canvas<T>
 
 impl<T: Data> Widget<T> for Canvas<T>
 {
-    fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut T, env: &Env) {
+    fn event(&mut self, _ctx: &mut EventCtx, _event: &Event, _data: &mut T, _env: &Env) {
         //we're letting their own filtering handle event filtering
         //we may want to revisit that decision
         // for child in self.children.iter_mut().filter_map(|x| x.widget_mut()) {
@@ -192,6 +193,7 @@ impl<T: Data> Child<T> {
         }
     }
 
+    #[allow(dead_code)]
     fn widget(&self) -> Option<&WidgetPod<T, Box<dyn Widget<T>>>> {
         match self {
             Child::Explicit { inner, ..} | Child::Implicit { inner, ..} => Some(inner),
