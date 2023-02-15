@@ -5,7 +5,7 @@ use druid::im::HashMap;
 use druid::kurbo::Rect;
 use druid::{
     BoxConstraints, Data, Env, Event, EventCtx, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, Size, UpdateCtx, Widget, WidgetPod, Point, WidgetId,};
-
+use druid_widget_nursery::WidgetExt;
 ///A container that allows for arbitrary layout.
 ///
 ///This widget allows you to lay widgets out at any point, and to allow that positioning to be dependent on the data.
@@ -50,25 +50,24 @@ impl<T: Data> Canvas<T>
     // to remove the the exist at the to position. Useful for drag and drop between
     // different containers
     // A third method
-    pub fn add_child(&mut self, ctx: &mut EventCtx, child: impl Widget<T> + 'static, from: PointKey) {
+    pub fn add_child(&mut self, child: impl Widget<T> + 'static, from: PointKey) {
         let index = self.position_map.remove(&from);
         
         if let Some(index) = index {
             self.children.remove(index);
         }
-
+        let inner: WidgetPod<T, Box<dyn Widget<T>>> = WidgetPod::new(Box::new(child.stack_tooltip("text")));
         let index = self.children.len();
-        self.children.insert(index, Child::Explicit { inner: WidgetPod::new(Box::new(child)), position: from.clone().into()});
+        self.children.insert(index, Child::Explicit { inner, position: from.clone().into()});
         self.position_map.insert(from, index);
-        ctx.children_changed();
+
     }
 
     // For index based layout containers the position will be replaced by an index
-    pub fn remove_child(&mut self, ctx: &mut EventCtx, from: PointKey){
+    pub fn remove_child(&mut self, from: PointKey){
         let index = self.position_map.remove(&from);
         if let Some(index) = index {
             self.children.remove(index);
-            ctx.children_changed();
         }
     }
 
@@ -76,7 +75,7 @@ impl<T: Data> Canvas<T>
     // Might need two variants for this: move and move_relocate in case you don't want 
     // to remove the the exist at the to position. Useful for drag and drop within the 
     // same container
-    pub fn move_child(&mut self, ctx: &mut EventCtx, from: PointKey, to: PointKey){
+    pub fn move_child(&mut self, from: PointKey, to: PointKey){
         let index_from = self.position_map.remove(&from);
         let index_to = self.position_map.remove(&to);
         
@@ -89,22 +88,22 @@ impl<T: Data> Canvas<T>
             println!("Location updated");
             self.position_map.insert(to, index);
         }
-        ctx.children_changed();
     }
 
     // For index based layout containers the position will be replaced by an index
     // Can be useful for drag and drop operations within the same container
-    pub fn exchange_child(&mut self, ctx: &mut EventCtx, from: PointKey, to: PointKey){
+    pub fn exchange_child(&mut self, from: PointKey, to: PointKey){
         let index_from = self.position_map.remove(&from);
         let index_to = self.position_map.remove(&to);
         if let (Some(index_from), Some(index_to)) = (index_from, index_to) {
             self.position_map.insert(to, index_from);
             self.position_map.insert(from, index_to);
         }
-
-        ctx.children_changed();
     }
 
+    pub fn children_len(&self) -> usize {
+        self.children.len()
+    }
     // pub fn children_mut(&mut self, ctx: &mut EventCtx) -> &mut Vec<WidgetPod<T, Box<dyn Widget<T>>>> {
     //     ctx.children_changed();
     //     self.children.borrow_mut()
@@ -127,7 +126,7 @@ impl<T: Data> Widget<T> for Canvas<T>
     }
 
     fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, data: &T, env: &Env) {
-        println!("Canvas Parent ({:?}) Lifecycle: {:?}", ctx.widget_id(),event);
+        // println!("Canvas Parent ({:?}) Lifecycle: {:?}", ctx.widget_id(),event);
         for child in self.children.iter_mut().filter_map(|x| x.widget_mut()) {
             child.lifecycle(ctx, event, data, env);
         }
@@ -271,41 +270,3 @@ impl Into<Point> for PointKey {
         }
     }
 }
-
-// #[derive(Debug, PartialEq, Hash, Eq, Clone)]
-// pub struct SizeInt {
-//     /// The width.
-//     pub width: u32,
-//     /// The height.
-//     pub height: u32,
-// }
-
-// impl SizeInt {
-//     fn new(width: u32, height: u32) -> Self {
-//         Self { width, height}
-//     }
-// }
-
-// impl Default for SizeInt {
-//     fn default() -> Self {
-//         Self { width: 0, height: 0 }
-//     }
-// }
-
-// impl From<Size> for SizeInt {
-//     fn from(value: Size) -> Self {
-//         Self {
-//             width: value.width as u32,
-//             height: value.height as u32,
-//         }
-//     }
-// }
-
-// impl Into<Size> for SizeInt {
-//     fn into(self) -> Size {
-//         Size {
-//             width: self.width.into(),
-//             height: self.height.into(),
-//         }
-//     }
-// }
