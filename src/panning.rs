@@ -18,7 +18,7 @@ fn get_relative_offset(&self) -> Vec2;
 fn set_relative_offset(&mut self, offset: Vec2);
 }
 
-#[derive(Clone, Data, Lens, PartialEq)]
+#[derive(Clone, Data, Lens, PartialEq, Debug)]
 pub struct PanData where PanData:PanDataAccess {
     pub absolute_offset: Point,
     pub relative_offset: Vec2,

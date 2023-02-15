@@ -4,19 +4,20 @@
 /// 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 use druid::{im::Vector, Data, Lens};
+use std::fmt::Debug;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 /// 
 /// SaveSystemData
 /// 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-#[derive(Clone, Data, Lens, PartialEq)]
-pub struct SaveSystemData<T: Clone> {
+#[derive(Clone, Data, Lens, PartialEq, Debug)]
+pub struct SaveSystemData<T: Clone + Debug> {
     pub save_stack: Vector<T>,
     pub playback_index: usize,
 }
 
-impl<T: Clone> SaveSystemData<T> {
+impl<T: Clone + Debug> SaveSystemData<T> {
     pub fn new() -> Self {
         Self {
             save_stack: Vector::new(),
@@ -67,7 +68,7 @@ impl<T: Clone> SaveSystemData<T> {
     pub fn redo(&mut self){
         let playback_index = self.playback_index;
 
-        if playback_index != 0 {
+        if playback_index != self.save_stack.len() {
             self.playback_index = playback_index + 1;
         }
     }

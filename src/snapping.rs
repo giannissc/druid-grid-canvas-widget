@@ -24,7 +24,7 @@ pub trait GridSnapDataAccess: PanDataAccess + ZoomDataAccess {
     fn move_to_grid_position(&self, desired_position: Point) -> Point;
 }
 
-#[derive(Clone, Data, Lens, PartialEq)]
+#[derive(Clone, Data, Lens, PartialEq, Debug)]
 pub struct GridSnapData {
     pub cell_size: f64,
     pub grid_visibility: bool,

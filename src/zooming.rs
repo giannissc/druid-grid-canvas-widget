@@ -15,7 +15,7 @@ pub trait ZoomDataAccess {
     fn set_zoom_scale(&mut self, scale: f64);
 }
 
-#[derive(Clone, Data, Lens, PartialEq)]
+#[derive(Clone, Data, Lens, PartialEq, Debug)]
 pub struct ZoomData {
     pub zoom_scale: f64,
 }
