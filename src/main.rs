@@ -29,10 +29,9 @@ pub type Net = i32;
 #[derive(Data, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Hash)]
 pub enum GridNodeType<Net> {
     Wall,
-    //WeightedNode(Weight),
+    Boundary,
     StartNode(Net),
     TargetNode(Net),
-    //SteinerNode(Net),
     UnexploredNode(Net), //Rename to visitedNodes
     ExploredNode(Net),   //Rename to visitedNodes
     ChosenPath(Net),
@@ -42,6 +41,7 @@ impl GridNodeType<Net> {
     fn get_net(&self) -> &Net{
         match self{
             Self::Wall => &0,
+            Self::Boundary => &0,
             Self::StartNode(net) => net,
             Self::TargetNode(net) => net,
             Self::UnexploredNode(net) => net,
@@ -72,23 +72,25 @@ impl GridItem for GridNodeType<Net> {
 
     fn get_color(&self) -> Color {
         match self{
-            GridNodeType::Wall => black::LICORICE,
-            GridNodeType::StartNode(_) => blue::ARGENTINIAN_BLUE,
-            GridNodeType::TargetNode(_) => purple::PURPUREUS,
-            GridNodeType::UnexploredNode(_) => yellow::YELLOW_AMBER,
-            GridNodeType::ExploredNode(_) => brown::MAROON,
-            GridNodeType::ChosenPath(_) => green::ASH_GRAY,
+            Self::Wall => black::LICORICE,
+            Self::Boundary => orange::SALMON,
+            Self::StartNode(_) => blue::ARGENTINIAN_BLUE,
+            Self::TargetNode(_) => purple::PURPUREUS,
+            Self::UnexploredNode(_) => yellow::YELLOW_AMBER,
+            Self::ExploredNode(_) => brown::MAROON,
+            Self::ChosenPath(_) => green::ASH_GRAY,
         }
     }
 
     fn get_short_text(&self) -> String {
         match self{
-            GridNodeType::Wall => "Wall".into(),
-            GridNodeType::StartNode(net) => format!("{:?}", net),
-            GridNodeType::TargetNode(net) => format!("{:?}", net),
-            GridNodeType::UnexploredNode(net) => format!("{:?}", net),
-            GridNodeType::ExploredNode(net) => format!("{:?}", net),
-            GridNodeType::ChosenPath(net) => format!("{:?}", net),
+            Self::Wall => "Wall".into(),
+            Self::Boundary => "Bound".into(),
+            Self::StartNode(net) => format!("{:?}", net),
+            Self::TargetNode(net) => format!("{:?}", net),
+            Self::UnexploredNode(net) => format!("{:?}", net),
+            Self::ExploredNode(net) => format!("{:?}", net),
+            Self::ChosenPath(net) => format!("{:?}", net),
         }
     }
 }
@@ -249,9 +251,10 @@ fn make_grid_options() -> impl Widget<AppData>{
                 // .with_child(Button::new("Add pattern").lens(AppData::grid_data).on_click(|_ctx, data, _env|{
                 //     todo!()
                 // }))
-                // .with_child(Button::new("Add perimeter").lens(AppData::grid_data).on_click(|_ctx, data, _env|{
-                //     todo!()
-                // }))
+                .with_child(Button::new("Add perimeter").lens(AppData::grid_data).on_click(|ctx, data, _env|{
+                    data.grid_data.add_node_perimeter(GridIndex { row: 5, col: 5 }, 5, 10, GridNodeType::Boundary);
+                    ctx.submit_command(Command::new(TRIGER_CHANGE, (), Target::Widget(GRID_ID)));
+                }))
         )
         .with_child(
             Flex::row()
