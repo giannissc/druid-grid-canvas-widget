@@ -6,7 +6,7 @@
 use std::fmt::Debug;
 use druid::{im::{HashMap, HashSet, Vector}, Data, Rect, Point, Size, Widget, EventCtx, Event, Env, 
 Selector, MouseButton, LifeCycleCtx, LifeCycle, UpdateCtx, LayoutCtx, BoxConstraints, PaintCtx, 
-Affine, RenderContext, Lens, widget::{Label, LabelText}, Insets, Color, TextAlignment,};
+Affine, RenderContext, Lens, widget::{Label, LabelText}, Insets, Color, TextAlignment, Command, WidgetId, Target,};
 use druid_color_thesaurus::white;
 
 use crate::{GridItem, snapping::GridSnapData, save_system::SaveSystemData, StackItem, GridAction, GridState, GridIndex, canvas::Canvas,};
@@ -95,21 +95,21 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>
         false
     }
 
-    pub fn undo(&mut self){
+    pub fn undo(&mut self, ctx: &mut EventCtx, id: WidgetId){
         let item = self.save_data.undo();
         if let Some(item) = item {
             item.reverse_grid(&mut self.grid);
         }
-
-        
+        ctx.submit_command(Command::new(TRIGGER_CHANGE, (), Target::Widget(id)));
     }
 
-    pub fn redo(&mut self){
+    pub fn redo(&mut self, ctx: &mut EventCtx, id: WidgetId){
         let item = self.save_data.redo();
         if let Some(item) = item {
             item.forward_grid(&mut self.grid);
             
         }
+        ctx.submit_command(Command::new(TRIGGER_CHANGE, (), Target::Widget(id)));
     }
     
     // Auxiliary Grid Methods
@@ -119,6 +119,8 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>
         row_n: isize,
         column_n: isize,
         tool: T,
+        ctx: &mut EventCtx, 
+        id: WidgetId
     ) {
         let mut map: HashMap<GridIndex, (T, Option<T>)> = HashMap::new();
         for row in pos.row..pos.row + row_n {
@@ -160,16 +162,18 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>
         for (pos, (current_item, _)) in &map{
             self.grid.insert(*pos, *current_item);
         }
-        self.save_data.submit_and_process(StackItem::BatchAdd(map))
+        self.save_data.submit_and_process(StackItem::BatchAdd(map));
+        ctx.submit_command(Command::new(TRIGGER_CHANGE, (), Target::Widget(id)));
 
     }
 
     // Clear Grid methods
-    pub fn clear_all(&mut self){
+    pub fn clear_all(&mut self, ctx: &mut EventCtx, id: WidgetId){
         self.save_data.submit_and_process(StackItem::BatchRemove(self.grid.clone()));
         self.grid.clear();
+        ctx.submit_command(Command::new(TRIGGER_CHANGE, (), Target::Widget(id)));
     }
-    pub fn clear_except(&mut self, set: HashSet<T>){
+    pub fn clear_except(&mut self, set: HashSet<T>, ctx: &mut EventCtx, id: WidgetId){
         let mut map: HashMap<GridIndex, T> = HashMap::new();
         for item_type in set {
             self.grid.retain(|pos, item|{
@@ -182,8 +186,9 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>
             })
         }
         self.save_data.submit_and_process(StackItem::BatchRemove(map));
+        ctx.submit_command(Command::new(TRIGGER_CHANGE, (), Target::Widget(id)));
     }
-    pub fn clear_only(&mut self, set: HashSet<T>){
+    pub fn clear_only(&mut self, set: HashSet<T>, ctx: &mut EventCtx, id: WidgetId){
         let mut map: HashMap<GridIndex, T> = HashMap::new();
         for item_type in set {
             self.grid.retain(|pos, item|{
@@ -196,6 +201,7 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>
             })
         }
         self.save_data.submit_and_process(StackItem::BatchRemove(map));
+        ctx.submit_command(Command::new(TRIGGER_CHANGE, (), Target::Widget(id)));
     }
 
     // Save stack methods
@@ -551,7 +557,7 @@ impl<T: Data> GridChild<T> {
 }
 
 impl<T:Data> Widget<T> for GridChild<T> {
-    fn event(&mut self, ctx: &mut EventCtx, _event: &Event, _data: &mut T, _env: &Env) {
+    fn event(&mut self, _ctx: &mut EventCtx, _event: &Event, _data: &mut T, _env: &Env) {
         // Add tooltip logic on hover
         
     }

@@ -1,11 +1,11 @@
 use druid::im::{Vector, HashMap};
-use druid::{theme, AppLauncher, Color, LocalizedString, WindowDesc, Data, Lens, Widget, WidgetExt, WidgetId, Command, Target, };
+use druid::{theme, AppLauncher, Color, LocalizedString, WindowDesc, Data, Lens, Widget, WidgetExt, WidgetId,};
 
 use druid::widget::{Flex, Label, MainAxisAlignment, CrossAxisAlignment, Switch, Button, ControllerHost,};
 
 use druid_color_thesaurus::*;
 
-use druid_grid_graph_widget::grid_canvas::{GridCanvasData, GridCanvas, TRIGGER_CHANGE};
+use druid_grid_graph_widget::grid_canvas::{GridCanvasData, GridCanvas};
 use druid_grid_graph_widget::panning::{PanController, PanDataAccess};
 use druid_grid_graph_widget::zooming::{ZoomController, ZoomDataAccess};
 use druid_grid_graph_widget::{GridItem, StackItem, GridIndex};
@@ -277,23 +277,16 @@ fn make_grid_options() -> impl Widget<AppData>{
             Flex::row()
                 .with_child(Label::new("Playback: "))
                 .with_child(Button::new("Previous").lens(AppData::grid_data).on_click(|ctx, data, _env|{
-                    data.grid_data.undo();
-                    ctx.submit_command(Command::new(TRIGGER_CHANGE, (), Target::Widget(GRID_ID)));
+                    data.grid_data.undo(ctx, GRID_ID);
                 }))
                 .with_child(Button::new("Next").lens(AppData::grid_data).on_click(|ctx, data, _env|{
-                    data.grid_data.redo();
-                    ctx.submit_command(Command::new(TRIGGER_CHANGE, (), Target::Widget(GRID_ID)));
+                    data.grid_data.redo(ctx, GRID_ID);
                 }))
                 .with_child(Button::new("Clear").lens(AppData::grid_data).on_click(|ctx, data, _env|{
-                    data.grid_data.clear_all();
-                    ctx.submit_command(Command::new(TRIGGER_CHANGE, (), Target::Widget(GRID_ID)));
+                    data.grid_data.clear_all(ctx, GRID_ID);
                 }))
-                // .with_child(Button::new("Add pattern").lens(AppData::grid_data).on_click(|_ctx, data, _env|{
-                //     todo!()
-                // }))
                 .with_child(Button::new("Add perimeter").lens(AppData::grid_data).on_click(|ctx, data, _env|{
-                    data.grid_data.add_node_perimeter(GridIndex { row: 5, col: 5 }, 5, 10, GridNodeType::Boundary);
-                    ctx.submit_command(Command::new(TRIGGER_CHANGE, (), Target::Widget(GRID_ID)));
+                    data.grid_data.add_node_perimeter(GridIndex { row: 5, col: 5 }, 5, 10, GridNodeType::Boundary, ctx, GRID_ID);
                 }))
         )
         .with_child(
