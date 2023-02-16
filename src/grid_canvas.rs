@@ -30,7 +30,7 @@ pub const TRIGER_CHANGE: Selector = Selector::new("update-grid-playback");
 pub struct GridCanvasData<T: GridItem + PartialEq + Debug>{
     action: GridAction,
     pub grid_item: T,
-    grid: HashMap<GridIndex, T>,
+    pub grid: HashMap<GridIndex, T>,
     // Data Hierarchy
     pub(crate) save_data: SaveSystemData<StackItem<T>>,
     pub snap_data: GridSnapData,
