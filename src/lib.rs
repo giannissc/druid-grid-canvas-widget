@@ -243,7 +243,6 @@ impl<T: GridItem + Debug> StackItem<T> where GridCanvasData<T>: Data{
                 canvas.remove_child(from.into());
             },
             StackItem::Move(from_index, to_index, _) => {
-                println!("StackItem Move");
                 let from = data.snap_data.get_grid_position(from_index.row, from_index.col);
                 let to = data.snap_data.get_grid_position(to_index.row, to_index.col);
                 canvas.move_child(from.into(), to.into());
@@ -256,7 +255,6 @@ impl<T: GridItem + Debug> StackItem<T> where GridCanvasData<T>: Data{
                 }
             },
             StackItem::BatchRemove(items) => {
-                println!("Batch remove");
                 for (grid_index, _) in items {
                     let from = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
                     canvas.remove_child(from.into());

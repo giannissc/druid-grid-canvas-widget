@@ -371,7 +371,6 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
                             },
                             GridAction::Move => {
                                 if self.start_pos != grid_index {
-                                    println!("Move action");
                                     if data.move_node(&self.start_pos, &grid_index) {
                                         self.start_pos = grid_index;
                                     }
@@ -414,9 +413,7 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
         let is_forward =  (data.save_data.playback_index as isize - self.previous_playback_index as isize) >= 0;
         if is_forward {
             for index in self.previous_playback_index..data.save_data.playback_index {
-                // println!("Range: {:?}", (self.previous_playback_index..data.save_data.playback_index).into_iter());
                 if let Some(item) = data.save_data.save_stack.get(index) {
-                    println!("Canvas forward");
                     item.forward_canvas(&mut self.canvas, data);
                     ctx.children_changed();
                     ctx.request_paint();
@@ -424,9 +421,7 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
             }
         } else {
             for index in (data.save_data.playback_index..self.previous_playback_index).rev() {
-                // println!("Range: {:?}", (data.save_data.playback_index..self.previous_playback_index).rev());
                 if let Some(item) = data.save_data.save_stack.get(index) {
-                    println!("Canvas backward");
                     item.reverse_canvas(&mut self.canvas, data);
                     ctx.children_changed();
                     ctx.request_paint();
@@ -561,7 +556,6 @@ impl<T:Data> Widget<T> for GridChild<T> {
     }
 
     fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, data: &T, env: &Env) {
-        // println!("Canvas Child Lifecycle: {:?}", event);
 
         if let LifeCycle::HotChanged(_) | LifeCycle::DisabledChanged(_) = event {
             ctx.request_paint();
