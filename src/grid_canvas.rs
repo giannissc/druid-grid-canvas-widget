@@ -6,10 +6,10 @@
 use std::fmt::Debug;
 use druid::{im::{HashMap, HashSet, Vector}, Data, Rect, Point, Size, Widget, EventCtx, Event, Env, 
 Selector, MouseButton, LifeCycleCtx, LifeCycle, UpdateCtx, LayoutCtx, BoxConstraints, PaintCtx, 
-Affine, RenderContext, Lens, widget::{Label, LabelText, Button}, Insets, Color, WidgetPod};
+Affine, RenderContext, Lens, widget::{Label, LabelText}, Insets, Color, platform_menus::mac::file::{save, save_as, print}};
 use druid_color_thesaurus::white;
 
-use crate::{GridItem, snapping::GridSnapData, save_system::SaveSystemData, StackItem, GridAction, GridState, GridIndex, canvas::{Canvas, PointKey,},};
+use crate::{GridItem, snapping::GridSnapData, save_system::SaveSystemData, StackItem, GridAction, GridState, GridIndex, canvas::Canvas, grid_canvas::grid_canvas_data_derived_lenses::save_data};
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,9 +19,7 @@ use crate::{GridItem, snapping::GridSnapData, save_system::SaveSystemData, Stack
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 pub const SET_DISABLED: Selector = Selector::new("disabled-grid-state");
 pub const SET_ENABLED: Selector = Selector::new("idle-grid-state");
-pub const UPDATE_GRID_PLAYBACK: Selector = Selector::new("update-grid-playback");
-pub const UPDATE_PAINT_PLAYBACK: Selector = Selector::new("update-paint-playback");
-pub const REQUEST_PAINT: Selector =  Selector::new("request-paint");
+pub const TRIGER_CHANGE: Selector = Selector::new("update-grid-playback");
 
 //////////////////////////////////////////////////////////////////////////////////////
 //
@@ -30,16 +28,15 @@ pub const REQUEST_PAINT: Selector =  Selector::new("request-paint");
 //////////////////////////////////////////////////////////////////////////////////////
 #[derive(Clone, Data, Lens, PartialEq, Debug)]
 pub struct GridCanvasData<T: GridItem + PartialEq + Debug>{
-    pub action: GridAction,
+    action: GridAction,
     pub grid_item: T,
-    pub grid: HashMap<GridIndex, T>,
+    grid: HashMap<GridIndex, T>,
     // Data Hierarchy
-    pub save_data: SaveSystemData<StackItem<T>>,
+    pub(crate) save_data: SaveSystemData<StackItem<T>>,
     pub snap_data: GridSnapData,
-    pub position: Point, 
 }
 
-impl<T: GridItem + PartialEq + Debug> GridCanvasData<T> {
+impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>: Data{
     pub fn new(item_type: T) -> Self {
         Self {
             action: GridAction::Dynamic,
@@ -47,7 +44,6 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T> {
             grid: HashMap::new(),
             save_data: SaveSystemData::new(),
             snap_data: GridSnapData::new(50.0),
-            position: Point::ZERO,
         }
     }
 
@@ -97,6 +93,23 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T> {
             return true;
         }
         false
+    }
+
+    pub fn undo(&mut self){
+        let item = self.save_data.undo();
+        if let Some(item) = item {
+            item.reverse_grid(&mut self.grid);
+        }
+
+        
+    }
+
+    pub fn redo(&mut self){
+        let item = self.save_data.redo();
+        if let Some(item) = item {
+            item.forward_grid(&mut self.grid);
+            
+        }
     }
     
     // Auxiliary Grid Methods
@@ -245,25 +258,20 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T> {
 pub struct GridCanvas<T: GridItem + PartialEq + Debug> where GridCanvasData<T>: Data {
     start_pos: GridIndex,
     state: GridState,
-    // previous_stack_length: usize,
-    previous_playback_index: usize,
-    previous_direction: isize,
     // canvas: WidgetPod<GridCanvasData<T>, Canvas<GridCanvasData<T>>>,
     canvas: Canvas<GridCanvasData<T>>,
-
+    previous_playback_index: usize,
 }
 
 impl<T: Clone + GridItem + Debug> GridCanvas<T> where GridCanvasData<T>: Data {
     pub fn new() -> Self {
-        let mut canvas = Canvas::new();
+        let canvas = Canvas::new();
         GridCanvas {
             start_pos: GridIndex { row: 0, col: 0 },
             state: GridState::Idle,
-            // previous_stack_length: 0,
-            previous_playback_index: 0,
-            previous_direction: 0,
             // canvas: WidgetPod::new(canvas),
             canvas,
+            previous_playback_index: 0,
         }
     }
 
@@ -279,9 +287,6 @@ impl<T: Clone + GridItem + Debug> GridCanvas<T> where GridCanvasData<T>: Data {
 impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T> where GridCanvasData<T>: Data {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut GridCanvasData<T>, env: &Env) {
         // println!("Canvas Wrapper Event");
-        
-        let mut change_tracker: HashSet<StackItem<T>> = HashSet::new();
-
         match &self.state{
             GridState::Idle => {
                 // info!("Idle State");
@@ -289,46 +294,12 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
                     Event::Command(cmd) => {
                         if cmd.is(SET_DISABLED) {
                             self.state = GridState::Disabled;
-                        } else if cmd.is(UPDATE_GRID_PLAYBACK) {
-                            // info!("Playback index | {:?} vs {:?} | Stack Length", data.playback_index, data.save_stack.len());
-                            let playback_diff = data.save_data.playback_index as isize - self.previous_playback_index as isize;
-
-                            let range = 1..=(playback_diff.abs() as usize);
-
-                            for i in range {
-                                let foo = data.clone();
-                                if playback_diff > 0 {
-                                    if let Some(item) = data.save_data.save_stack.get(data.save_data.playback_index - i) {
-                                        item.forward(&mut data.grid, &mut self.canvas, foo);
-                                        change_tracker.insert(item.clone());
-                                        ctx.children_changed();
-                                    }
-                                } else {
-                                    if let Some(item) = data.save_data.save_stack.get(data.save_data.playback_index + i - 1) {
-                                        item.reverse(&mut data.grid, &mut self.canvas, foo);
-                                        change_tracker.insert(item.clone());
-                                        ctx.children_changed();
-                                    }
-                                }
-                            }
-                        } else if cmd.is(UPDATE_PAINT_PLAYBACK) {
-                            let item = data.save_data.save_stack.get(data.save_data.playback_index - 1).unwrap();
-                            change_tracker.insert(item.clone());
-                        } else if cmd.is(REQUEST_PAINT) {
-                            ctx.request_paint();
                         }
                     },
                     Event::MouseDown(e) => {
                         let (row, col) = data.snap_data.get_grid_index(e.pos);
                         let grid_index = GridIndex::new(row, col);
                         let option = data.grid.get(&grid_index);
-
-                        let position = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
-                        let size = Size::new(data.snap_data.cell_size, data.snap_data.cell_size);
-
-                        // println!("Mouse Point: {:?}", e.pos);
-                        // println!("Grid Index: {:?}", grid_index);
-                        // println!("Grid Point: {:?}", position);
 
                         if self.state == GridState::Idle{
                             if e.button == MouseButton::Left{
@@ -372,23 +343,9 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
 
                         if let GridState::Running(_) = self.state{
                             if data.action == GridAction::Add {
-                                if data.add_node(&grid_index, data.grid_item) {
-                                    // let foo = self.canvas.add_child(ctx, child, to);
-                                    change_tracker.insert(data.save_data.save_stack.last().unwrap().clone());
-                                    
-                                    let child = GridChild::new(data.grid_item.get_short_text(), data.grid_item.get_color(), size);
-                                    
-                                    // self.canvas.widget_mut().add_child(child, position.into());
-                                    self.canvas.add_child(child, position.into());
-                                    ctx.children_changed();
-                                }
+                                data.add_node(&grid_index, data.grid_item);
                             } else if data.action == GridAction::Remove && option.is_some(){
-                                if data.remove_node(&grid_index) {
-                                    change_tracker.insert(data.save_data.save_stack.last().unwrap().clone());
-                                    // self.canvas.widget_mut().remove_child(position.into());
-                                    self.canvas.remove_child(position.into());
-                                    ctx.children_changed();
-                                }
+                                data.remove_node(&grid_index);
                             } else if data.action == GridAction::Move && option.is_some() {
                                 self.start_pos = grid_index;
                             }
@@ -408,44 +365,21 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
                         let grid_index = GridIndex::new(row, col);
                         let option = data.grid.get(&grid_index);
 
-                        let position = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
-                        let size = Size::new(data.snap_data.cell_size, data.snap_data.cell_size);
-
-                        // println!("Mouse Point: {:?}", e.pos);
-                        // println!("Grid Index: {:?}", grid_index);
-                        // println!("Grid Point: {:?}", position);
-
                         match data.action{
                             GridAction::Add => {
-                                if data.add_node(&grid_index, data.grid_item) {
-                                    change_tracker.insert(data.save_data.save_stack.last().unwrap().clone());
-                                    let child = GridChild::new(data.grid_item.get_short_text(), data.grid_item.get_color(), size);
-                                    // self.canvas.widget_mut().add_child(child, position.into());
-                                    self.canvas.add_child(child, position.into());
-                                    ctx.children_changed();
-                                }                                    
+                                data.add_node(&grid_index, data.grid_item);
                             },
                             GridAction::Move => {
                                 if self.start_pos != grid_index {
+                                    println!("Move action");
                                     if data.move_node(&self.start_pos, &grid_index) {
-                                        change_tracker.insert(data.save_data.save_stack.last().unwrap().clone());
-                                        // let from = data.snap_data.get_grid_position(self.start_pos.row, self.start_pos.row).into();
-                                        // let to = data.snap_data.get_grid_position(grid_index.row, grid_index.row).into();
-                                        // println!("{:?} -> {:?}", self.start_pos, grid_index);
-                                        // println!("{:?} -> {:?}", from, to);
-                                        // self.canvas.move_child(ctx, from, to);
                                         self.start_pos = grid_index;
                                     }
                                 }
                             },
                             GridAction::Remove => {
                                 if option.is_some(){
-                                    if data.remove_node(&grid_index) {
-                                        change_tracker.insert(data.save_data.save_stack.last().unwrap().clone());
-                                        // self.canvas.widget_mut().remove_child(position.into());
-                                        self.canvas.remove_child(position.into());
-                                        ctx.children_changed();
-                                    }
+                                    data.remove_node(&grid_index);
                                 }        
                             },
                             _ => (),
@@ -477,18 +411,32 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
             },
         }
 
-        // To be removed with refactoring
-        if change_tracker.len() != 0 {           
-            for item in &change_tracker {
-                for pos in item.get_positions().iter(){
-                    ctx.request_paint_rect(self.invalidation_area(*pos, data.snap_data.cell_size));
+        let is_forward =  (data.save_data.playback_index as isize - self.previous_playback_index as isize) >= 0;
+        if is_forward {
+            for index in self.previous_playback_index..data.save_data.playback_index {
+                // println!("Range: {:?}", (self.previous_playback_index..data.save_data.playback_index).into_iter());
+                if let Some(item) = data.save_data.save_stack.get(index) {
+                    println!("Canvas forward");
+                    item.forward_canvas(&mut self.canvas, data);
+                    ctx.children_changed();
+                    ctx.request_paint();
                 }
             }
-
-            change_tracker.clear();
-            ctx.request_update();
-            self.previous_playback_index = data.save_data.playback_index;
+        } else {
+            for index in (data.save_data.playback_index..self.previous_playback_index).rev() {
+                // println!("Range: {:?}", (data.save_data.playback_index..self.previous_playback_index).rev());
+                if let Some(item) = data.save_data.save_stack.get(index) {
+                    println!("Canvas backward");
+                    item.reverse_canvas(&mut self.canvas, data);
+                    ctx.children_changed();
+                    ctx.request_paint();
+                }
+            }
         }
+
+        
+
+        self.previous_playback_index = data.save_data.playback_index;
 
         self.canvas.event(ctx, event, data, env);
     }
@@ -499,6 +447,31 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
         // if let LifeCycle::Internal(RouteWidgetAdded) = event {
         //     self.canvas.lifecycle(ctx, &LifeCycle::WidgetAdded, data, env);
         // }
+        if let LifeCycle::WidgetAdded = event {
+            for index in 0..data.save_data.playback_index {
+                if let Some(item) = data.save_data.save_stack.get(index) {
+                    match item {
+                        StackItem::Add(grid_index, current_item, _) => {
+                            let from = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
+                            let size = Size::new(data.snap_data.cell_size, data.snap_data.cell_size);
+                            let child = GridChild::new(current_item.get_short_text(), current_item.get_color(), size);
+                            self.canvas.add_child(child, from.into());
+                            ctx.children_changed();
+                        },
+                        StackItem::BatchAdd(map) => {
+                            for (grid_index, (current_item, _)) in map {
+                                let from = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
+                                let size = Size::new(data.snap_data.cell_size, data.snap_data.cell_size);
+                                let child = GridChild::new(current_item.get_short_text(), current_item.get_color(), size);
+                                self.canvas.add_child(child, from.into());
+                                ctx.children_changed();
+                            }
+                        },
+                        _ => (),
+                    }
+                }
+            }
+        }
 
         self.canvas.lifecycle(ctx, event, data, env);
     }
@@ -506,44 +479,16 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
     fn update(&mut self, ctx: &mut UpdateCtx, old_data: &GridCanvasData<T>, data: &GridCanvasData<T>, env: &Env){
         // println!("Canvas Wrapper Update");
         // self.canvas.update(ctx, data, env);
-        println!("=====================================");
-        println!("Old Grid | {:?} vs {:?} | New Grid", old_data.grid.len(), data.grid.len());
-        println!("Old Save | {:?} vs {:?} | New Save", old_data.save_data.save_stack.len(), data.save_data.save_stack.len());
-        println!("Old Play | {:?} vs {:?} | New Play", self.previous_playback_index, data.save_data.playback_index);
-        println!("Canvas Children: {:?}\n", self.canvas.children_len());
-
-        let index = data.save_data.playback_index;
-        let current_direction = index as isize - self.previous_playback_index as isize;
-        
-        let offset = 0;
-        
-        while data.grid.len() != self.canvas.children_len() {
-            if self.previous_direction > 0 { //redo case
-                // if grid > canvas action is an addition -> just read type and location and add to canvas (need separate case for batch)
-                // if grid < canvas action is a deletion -> just read location and delete from canvas (need separate case for batch)
-                println!("Positive direction");
-                let foo = data.save_data.save_stack.get(index+offset);
-                println!("Save Item: {:?}", foo);
-                break;
-
-            } else if self.previous_direction < 0 { //undo case
-                println!("Negative direction");
-                break;
-
-            } else { // submit_and_process case
-                println!("No direction");
-                break;
-
-            }
-        }
-
-        self.previous_direction = current_direction;
+        // println!("=====================================");
+        // println!("Old Grid | {:?} vs {:?} | New Grid", old_data.grid.len(), data.grid.len());
+        // println!("Old Save | {:?} vs {:?} | New Save", old_data.save_data.save_stack.len(), data.save_data.save_stack.len());
+        // println!("Old Play | {:?} vs {:?} | New Play", old_data.save_data.playback_index, data.save_data.playback_index);
+        // println!("Canvas Children: {:?}\n", self.canvas.children_len());
         
         self.canvas.update(ctx, old_data, data, env);
         }
 
     fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &GridCanvasData<T>, env: &Env) -> Size {
-        // println!("Canvas Wrapper Layout");
         let origin = Point::new(0., 0.);
         //debug!("Box constraints width: {:?}", bc.max().width);
         //debug!("Box constraints height: {:?}", bc.max().height);
@@ -561,7 +506,6 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, data: &GridCanvasData<T>, env: &Env) {
-        // println!("Canvas Wrapper Paint");
         //debug!("Running paint method");
         // Draw grid cells
         let damage_region = ctx.region().clone();
@@ -594,7 +538,7 @@ pub struct GridChild<T> {
     size: Size,
 }
 
-impl<T:Data> GridChild<T> {
+impl<T: Data> GridChild<T> {
     pub fn new(text: impl Into<LabelText<T>>, color: Color, size: Size) -> Self {
         // let foo = Label::new(tooltip_text).tooltip();
         let mut label_text = Label::new(text);

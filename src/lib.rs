@@ -174,38 +174,90 @@ impl<T: GridItem + Debug> StackItem<T> where GridCanvasData<T>: Data{
         set
     }
 
-    fn forward(&self, grid: &mut HashMap<GridIndex, T>, canvas: &mut Canvas<GridCanvasData<T>>, data: GridCanvasData<T>){
-        let size = Size::new(data.snap_data.cell_size, data.snap_data.cell_size);
+    fn forward_grid(&self, grid: &mut HashMap<GridIndex, T>){
         match self{
             StackItem::Add(grid_index, current_item, _) => {
                 grid.insert(*grid_index, *current_item);
+            },
+            StackItem::Remove(grid_index, _) => {
+                grid.remove(grid_index);
+            },
+            StackItem::Move(from_index, to_index, item) => {
+                grid.remove(from_index);
+                grid.insert(*to_index, *item);
+            },
+            StackItem::BatchAdd(items) => {
+                for (grid_index, (current_item, _)) in items {
+                    grid.insert(*grid_index, *current_item);
+                }
+            },
+            StackItem::BatchRemove(items) => {
+                for (grid_index, _) in items {
+                    grid.remove(grid_index);
+                }
+            }
+        }
+    }
+
+    fn reverse_grid(&self, grid: &mut HashMap<GridIndex, T>){       
+        match self{
+            StackItem::Add(grid_index, _, previous_item) => {
+                grid.remove(grid_index);
+                if let Some(previous_item) = previous_item {
+                    grid.insert(*grid_index, *previous_item);
+                }
+            },
+            StackItem::Remove(grid_index, previous_item) => {
+                grid.insert(*grid_index, *previous_item);
+            },
+            StackItem::Move(from_index, to_index, item) => {
+                grid.remove(to_index);
+                grid.insert(*from_index, *item);
+            }
+            StackItem::BatchAdd(items) => {
+                for (grid_index, (_, previous_item)) in items {
+                    grid.remove(grid_index);
+                    if let Some(previous_item) = previous_item {
+                        grid.insert(*grid_index, *previous_item);
+                    }
+                }
+            },
+            StackItem::BatchRemove(items) => {
+                for (grid_index, previous_item) in items {
+                    grid.insert(*grid_index, *previous_item);
+                }
+            }
+        }
+    }
+
+    fn forward_canvas(&self, canvas: &mut Canvas<GridCanvasData<T>>, data: &GridCanvasData<T>){
+        let size = Size::new(data.snap_data.cell_size, data.snap_data.cell_size);
+        match self{
+            StackItem::Add(grid_index, current_item, _) => {
                 let from = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
                 let child = GridChild::new(current_item.get_short_text(), current_item.get_color(), size);
                 canvas.add_child(child, from.into());
             },
             StackItem::Remove(grid_index, _) => {
-                grid.remove(grid_index);
                 let from = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
                 canvas.remove_child(from.into());
             },
             StackItem::Move(from_index, to_index, item) => {
-                grid.remove(from_index);
-                grid.insert(*to_index, *item);
+                println!("StackItem Move");
                 let from = data.snap_data.get_grid_position(from_index.row, from_index.col);
                 let to = data.snap_data.get_grid_position(to_index.row, to_index.col);
                 canvas.move_child(from.into(), to.into());
             },
             StackItem::BatchAdd(items) => {
                 for (grid_index, (current_item, _)) in items {
-                    grid.insert(*grid_index, *current_item);
                     let child = GridChild::new(current_item.get_short_text(), current_item.get_color(), size);
                     let from = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
                     canvas.add_child(child, from.into());
                 }
             },
             StackItem::BatchRemove(items) => {
+                println!("Batch remove");
                 for (grid_index, _) in items {
-                    grid.remove(grid_index);
                     let from = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
                     canvas.remove_child(from.into());
                 }
@@ -213,29 +265,23 @@ impl<T: GridItem + Debug> StackItem<T> where GridCanvasData<T>: Data{
         }
     }
 
-    fn reverse(&self, grid: &mut HashMap<GridIndex, T>, canvas: &mut Canvas<GridCanvasData<T>>, data: GridCanvasData<T>){
-        let size = Size::new(data.snap_data.cell_size, data.snap_data.cell_size);
-        
+    fn reverse_canvas(&self, canvas: &mut Canvas<GridCanvasData<T>>, data: &GridCanvasData<T>){   
+        let size = Size::new(data.snap_data.cell_size, data.snap_data.cell_size);    
         match self{
             StackItem::Add(grid_index, _, previous_item) => {
-                grid.remove(grid_index);
                 let from = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
                 canvas.remove_child(from.into());
                 if let Some(previous_item) = previous_item {
                     let child = GridChild::new(previous_item.get_short_text(), previous_item.get_color(), size);
-                    grid.insert(*grid_index, *previous_item);
                     canvas.add_child(child, from.into())
                 }
             },
             StackItem::Remove(grid_index, previous_item) => {
-                grid.insert(*grid_index, *previous_item);
                 let from = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
                 let child = GridChild::new(previous_item.get_short_text(), previous_item.get_color(), size);
                 canvas.add_child(child, from.into())
             },
             StackItem::Move(from_index, to_index, item) => {
-                grid.remove(to_index);
-                grid.insert(*from_index, *item);
                 let from = data.snap_data.get_grid_position(from_index.row, from_index.col);
                 let to = data.snap_data.get_grid_position(to_index.row, to_index.col);
                 canvas.move_child(from.into(), to.into())
@@ -243,10 +289,8 @@ impl<T: GridItem + Debug> StackItem<T> where GridCanvasData<T>: Data{
             StackItem::BatchAdd(items) => {
                 for (grid_index, (_, previous_item)) in items {
                     let from = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
-                    grid.remove(grid_index);
                     canvas.remove_child(from.into());
                     if let Some(previous_item) = previous_item {
-                        grid.insert(*grid_index, *previous_item);
                         let child = GridChild::new(previous_item.get_short_text(), previous_item.get_color(), size);
                         canvas.add_child(child, from.into())
                     }
@@ -254,7 +298,6 @@ impl<T: GridItem + Debug> StackItem<T> where GridCanvasData<T>: Data{
             },
             StackItem::BatchRemove(items) => {
                 for (grid_index, previous_item) in items {
-                    grid.insert(*grid_index, *previous_item);
                     let from = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
                     let child = GridChild::new(previous_item.get_short_text(), previous_item.get_color(), size);
                     canvas.add_child(child, from.into());

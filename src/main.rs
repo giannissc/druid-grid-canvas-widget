@@ -5,7 +5,7 @@ use druid::widget::{Flex, Label, MainAxisAlignment, CrossAxisAlignment, Switch, 
 
 use druid_color_thesaurus::*;
 
-use druid_grid_graph_widget::grid_canvas::{GridCanvasData, GridCanvas, UPDATE_GRID_PLAYBACK};
+use druid_grid_graph_widget::grid_canvas::{GridCanvasData, GridCanvas, TRIGER_CHANGE};
 use druid_grid_graph_widget::panning::{PanController, PanDataAccess};
 use druid_grid_graph_widget::zooming::{ZoomController, ZoomDataAccess};
 use druid_grid_graph_widget::{GridItem, StackItem, GridIndex};
@@ -235,16 +235,23 @@ fn make_grid_options() -> impl Widget<AppData>{
             Flex::row()
                 .with_child(Label::new("Playback: "))
                 .with_child(Button::new("Previous").lens(AppData::grid_data).on_click(|ctx, data, _env|{
-                    data.grid_data.save_data.undo();
-                    ctx.submit_command(Command::new(UPDATE_GRID_PLAYBACK, (), Target::Widget(GRID_ID)));
+                    data.grid_data.undo();
+                    ctx.submit_command(Command::new(TRIGER_CHANGE, (), Target::Widget(GRID_ID)));
                 }))
                 .with_child(Button::new("Next").lens(AppData::grid_data).on_click(|ctx, data, _env|{
-                    data.grid_data.save_data.redo();
-                    ctx.submit_command(Command::new(UPDATE_GRID_PLAYBACK, (), Target::Widget(GRID_ID)));
+                    data.grid_data.redo();
+                    ctx.submit_command(Command::new(TRIGER_CHANGE, (), Target::Widget(GRID_ID)));
                 }))
-                .with_child(Button::new("Clear").lens(AppData::grid_data).on_click(|_ctx, data, _env|{
+                .with_child(Button::new("Clear").lens(AppData::grid_data).on_click(|ctx, data, _env|{
                     data.grid_data.clear_all();
+                    ctx.submit_command(Command::new(TRIGER_CHANGE, (), Target::Widget(GRID_ID)));
                 }))
+                // .with_child(Button::new("Add pattern").lens(AppData::grid_data).on_click(|_ctx, data, _env|{
+                //     todo!()
+                // }))
+                // .with_child(Button::new("Add perimeter").lens(AppData::grid_data).on_click(|_ctx, data, _env|{
+                //     todo!()
+                // }))
         )
         .with_child(
             Flex::row()

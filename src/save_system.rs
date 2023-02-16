@@ -57,20 +57,24 @@ impl<T: Clone + Debug> SaveSystemData<T> {
         self.playback_index = index + diff;
     }
 
-    pub fn undo(&mut self){
+    pub fn undo(&mut self) -> Option<&T> {
         let playback_index = self.playback_index;
 
         if playback_index != 0 {
             self.playback_index = playback_index - 1;
+            return self.save_stack.get(self.playback_index);
         }
+        None
     }
     
-    pub fn redo(&mut self){
+    pub fn redo(&mut self) -> Option<&T> {
         let playback_index = self.playback_index;
 
         if playback_index != self.save_stack.len() {
             self.playback_index = playback_index + 1;
+            return self.save_stack.get(self.playback_index-1);
         }
+        None
     }
     
     #[allow(dead_code)]
