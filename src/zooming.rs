@@ -88,7 +88,6 @@ impl<T: Data + ZoomDataAccess, W: Widget<T>> Controller<T, W> for ZoomController
                 }
                 // data.zoom_scale = current_zoom_scale;
                 data.set_zoom_scale(current_zoom_scale)
-                // println!("Zoom scale: {:?}", current_zoom_scale);
             },
 
             _ => (),
