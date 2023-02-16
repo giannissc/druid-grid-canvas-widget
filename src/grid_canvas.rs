@@ -459,8 +459,8 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
                                 let size = Size::new(data.snap_data.cell_size, data.snap_data.cell_size);
                                 let child = GridChild::new(current_item.get_short_text(), current_item.get_color(), size);
                                 self.canvas.add_child(child, from.into());
-                                ctx.children_changed();
                             }
+                            ctx.children_changed();
                         },
                         _ => (),
                     }
