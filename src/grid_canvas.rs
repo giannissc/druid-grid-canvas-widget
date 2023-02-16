@@ -19,7 +19,7 @@ use crate::{GridItem, snapping::GridSnapData, save_system::SaveSystemData, Stack
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 pub const SET_DISABLED: Selector = Selector::new("disabled-grid-state");
 pub const SET_ENABLED: Selector = Selector::new("idle-grid-state");
-pub const TRIGER_CHANGE: Selector = Selector::new("update-grid-playback");
+pub const TRIGGER_CHANGE: Selector = Selector::new("update-grid-playback");
 
 //////////////////////////////////////////////////////////////////////////////////////
 //
