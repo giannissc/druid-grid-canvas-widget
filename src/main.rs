@@ -1,11 +1,11 @@
-use druid::im::{Vector};
+use druid::im::{Vector, HashMap};
 use druid::{theme, AppLauncher, Color, LocalizedString, WindowDesc, Data, Lens, Widget, WidgetExt, WidgetId, Command, Target, };
 
 use druid::widget::{Flex, Label, MainAxisAlignment, CrossAxisAlignment, Switch, Button, ControllerHost,};
 
 use druid_color_thesaurus::*;
 
-use druid_grid_graph_widget::grid_canvas::{GridCanvasData, GridCanvas, TRIGER_CHANGE};
+use druid_grid_graph_widget::grid_canvas::{GridCanvasData, GridCanvas, TRIGGER_CHANGE};
 use druid_grid_graph_widget::panning::{PanController, PanDataAccess};
 use druid_grid_graph_widget::zooming::{ZoomController, ZoomDataAccess};
 use druid_grid_graph_widget::{GridItem, StackItem, GridIndex};
@@ -13,9 +13,6 @@ use druid_grid_graph_widget::snapping::{GridSnapPainter, GridSnapData, GridSnapD
 //////////////////////////////////////////////////////////////////////////////////////
 // Constants
 //////////////////////////////////////////////////////////////////////////////////////
-pub const GRID_COLUMNS: usize = 81;
-pub const GRID_ROWS: usize = 31;
-pub const BACKGROUND: Color = black::ONYX;
 pub const GRID_ID: WidgetId = WidgetId::reserved(1);
 
 //////////////////////////////////////////////////////////////////////////////////////
@@ -175,7 +172,7 @@ impl GridSnapDataAccess for AppData {
 fn main() {
     let main_window = WindowDesc::new(make_ui())
         .window_size((1000.0, 500.0))
-        .title(LocalizedString::new("Placement & Routing Experiments"));
+        .title(LocalizedString::new("Grid Canvas UI"));
 
     let mut data = AppData {
         is_paused: false,
@@ -190,6 +187,43 @@ fn main() {
     pattern.push_back(StackItem::Add(GridIndex{row:0, col:2}, GridNodeType::Wall, None));
     pattern.push_back(StackItem::Add(GridIndex{row:1, col:0}, GridNodeType::Wall, None));
     pattern.push_back(StackItem::Add(GridIndex{row:2, col:0}, GridNodeType::Wall, None));
+
+    pattern.push_back(StackItem::Add(GridIndex{row:8, col:1}, GridNodeType::StartNode(1), None));
+    pattern.push_back(StackItem::Add(GridIndex{row:8, col:18}, GridNodeType::TargetNode(1), None));
+    pattern.push_back(StackItem::Add(GridIndex{row:3, col:19}, GridNodeType::TargetNode(1), None));
+    pattern.push_back(StackItem::Add(GridIndex{row:6, col:35}, GridNodeType::TargetNode(1), None));
+
+    pattern.push_back(StackItem::Add(GridIndex { row: 4, col: 4 }, GridNodeType::StartNode(0), None));
+    pattern.push_back(StackItem::Add(GridIndex{row:12, col: 4}, GridNodeType::TargetNode(0), None));
+    
+    let mut map: HashMap<GridIndex, (GridNodeType<Net>, Option<GridNodeType<Net>>)> = HashMap::new();
+
+    let start_row = 5;
+    let start_col = 10;
+
+    for row in 0..8 {
+        let pos = GridIndex{row:start_row + row, col:start_col};
+        map.insert(pos, (GridNodeType::Wall, None));
+    }
+
+    for col in 1..17 {
+        let pos = GridIndex{row:start_row, col:start_col+col};
+        map.insert(pos, (GridNodeType::Wall, None));
+
+        let pos = GridIndex{row:start_row+7, col:start_col+col};
+        map.insert(pos, (GridNodeType::Wall, None));
+    }
+
+    for row in 1..4 {
+        let pos = GridIndex{row:start_row - row, col:start_col + 6};
+        map.insert(pos, (GridNodeType::Wall, None));
+
+        let pos = GridIndex{row:start_row - row, col:start_col + 14};
+        map.insert(pos, (GridNodeType::Wall, None));
+    }
+
+    pattern.push_back(StackItem::BatchAdd(map));
+    
     data.grid_data.submit_to_stack_and_process(pattern);
     // data.grid_data.submit_to_stack(pattern);
     AppLauncher::with_window(main_window)
@@ -204,6 +238,12 @@ fn main() {
         .launch(data)
         .expect("launch failed");
 }
+
+//////////////////////////////////////////////////////////////////////////////////////
+//
+// UI Functions
+//
+//////////////////////////////////////////////////////////////////////////////////////
 
 fn make_ui() -> impl Widget<AppData>{
     let snap_painter =  GridSnapPainter::default();
@@ -227,7 +267,7 @@ fn make_control_bar() -> impl Widget<AppData>{
         .main_axis_alignment(MainAxisAlignment::SpaceBetween)
         .cross_axis_alignment(CrossAxisAlignment::Start)
         .must_fill_main_axis(true)
-        .background(BACKGROUND)
+        .background(black::ONYX)
 }
 
 fn make_grid_options() -> impl Widget<AppData>{
@@ -238,22 +278,22 @@ fn make_grid_options() -> impl Widget<AppData>{
                 .with_child(Label::new("Playback: "))
                 .with_child(Button::new("Previous").lens(AppData::grid_data).on_click(|ctx, data, _env|{
                     data.grid_data.undo();
-                    ctx.submit_command(Command::new(TRIGER_CHANGE, (), Target::Widget(GRID_ID)));
+                    ctx.submit_command(Command::new(TRIGGER_CHANGE, (), Target::Widget(GRID_ID)));
                 }))
                 .with_child(Button::new("Next").lens(AppData::grid_data).on_click(|ctx, data, _env|{
                     data.grid_data.redo();
-                    ctx.submit_command(Command::new(TRIGER_CHANGE, (), Target::Widget(GRID_ID)));
+                    ctx.submit_command(Command::new(TRIGGER_CHANGE, (), Target::Widget(GRID_ID)));
                 }))
                 .with_child(Button::new("Clear").lens(AppData::grid_data).on_click(|ctx, data, _env|{
                     data.grid_data.clear_all();
-                    ctx.submit_command(Command::new(TRIGER_CHANGE, (), Target::Widget(GRID_ID)));
+                    ctx.submit_command(Command::new(TRIGGER_CHANGE, (), Target::Widget(GRID_ID)));
                 }))
                 // .with_child(Button::new("Add pattern").lens(AppData::grid_data).on_click(|_ctx, data, _env|{
                 //     todo!()
                 // }))
                 .with_child(Button::new("Add perimeter").lens(AppData::grid_data).on_click(|ctx, data, _env|{
                     data.grid_data.add_node_perimeter(GridIndex { row: 5, col: 5 }, 5, 10, GridNodeType::Boundary);
-                    ctx.submit_command(Command::new(TRIGER_CHANGE, (), Target::Widget(GRID_ID)));
+                    ctx.submit_command(Command::new(TRIGGER_CHANGE, (), Target::Widget(GRID_ID)));
                 }))
         )
         .with_child(
@@ -285,4 +325,4 @@ fn make_grid_options() -> impl Widget<AppData>{
         .cross_axis_alignment(CrossAxisAlignment::Start)
         .padding(5.0)
 
-}  
+}
