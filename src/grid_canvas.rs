@@ -6,10 +6,10 @@
 use std::fmt::Debug;
 use druid::{im::{HashMap, HashSet, Vector}, Data, Rect, Point, Size, Widget, EventCtx, Event, Env, 
 Selector, MouseButton, LifeCycleCtx, LifeCycle, UpdateCtx, LayoutCtx, BoxConstraints, PaintCtx, 
-Affine, RenderContext, Lens, widget::{Label, LabelText}, Insets, Color, platform_menus::mac::file::{save, save_as, print}};
+Affine, RenderContext, Lens, widget::{Label, LabelText}, Insets, Color,};
 use druid_color_thesaurus::white;
 
-use crate::{GridItem, snapping::GridSnapData, save_system::SaveSystemData, StackItem, GridAction, GridState, GridIndex, canvas::Canvas, grid_canvas::grid_canvas_data_derived_lenses::save_data};
+use crate::{GridItem, snapping::GridSnapData, save_system::SaveSystemData, StackItem, GridAction, GridState, GridIndex, canvas::Canvas,};
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -489,7 +489,7 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
         }
 
     fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &GridCanvasData<T>, env: &Env) -> Size {
-        let origin = Point::new(0., 0.);
+        // let origin = Point::new(0., 0.);
         //debug!("Box constraints width: {:?}", bc.max().width);
         //debug!("Box constraints height: {:?}", bc.max().height);
         self.canvas.layout(ctx, bc, data, env);
@@ -508,12 +508,12 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
     fn paint(&mut self, ctx: &mut PaintCtx, data: &GridCanvasData<T>, env: &Env) {
         //debug!("Running paint method");
         // Draw grid cells
-        let damage_region = ctx.region().clone();
-
+        
+        // let damage_region = ctx.region().clone();
         // Calculate area to render
-        let paint_rectangles = damage_region.rects();
+        // let paint_rectangles = damage_region.rects();
+        // let size = ctx.size();
 
-        let size = ctx.size();
 
         ctx.with_save(|ctx| {
             let translate = Affine::translate(data.snap_data.pan_data.absolute_offset.to_vec2());
@@ -555,7 +555,7 @@ impl<T: Data> GridChild<T> {
 }
 
 impl<T:Data> Widget<T> for GridChild<T> {
-    fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut T, env: &Env) {
+    fn event(&mut self, ctx: &mut EventCtx, _event: &Event, _data: &mut T, _env: &Env) {
         // Add tooltip logic on hover
         
     }

@@ -242,7 +242,7 @@ impl<T: GridItem + Debug> StackItem<T> where GridCanvasData<T>: Data{
                 let from = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
                 canvas.remove_child(from.into());
             },
-            StackItem::Move(from_index, to_index, item) => {
+            StackItem::Move(from_index, to_index, _) => {
                 println!("StackItem Move");
                 let from = data.snap_data.get_grid_position(from_index.row, from_index.col);
                 let to = data.snap_data.get_grid_position(to_index.row, to_index.col);
@@ -281,7 +281,7 @@ impl<T: GridItem + Debug> StackItem<T> where GridCanvasData<T>: Data{
                 let child = GridChild::new(previous_item.get_short_text(), previous_item.get_color(), size);
                 canvas.add_child(child, from.into())
             },
-            StackItem::Move(from_index, to_index, item) => {
+            StackItem::Move(from_index, to_index, _) => {
                 let from = data.snap_data.get_grid_position(from_index.row, from_index.col);
                 let to = data.snap_data.get_grid_position(to_index.row, to_index.col);
                 canvas.move_child(from.into(), to.into())
