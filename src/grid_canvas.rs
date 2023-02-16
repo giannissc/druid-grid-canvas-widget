@@ -6,7 +6,7 @@
 use std::fmt::Debug;
 use druid::{im::{HashMap, HashSet, Vector}, Data, Rect, Point, Size, Widget, EventCtx, Event, Env, 
 Selector, MouseButton, LifeCycleCtx, LifeCycle, UpdateCtx, LayoutCtx, BoxConstraints, PaintCtx, 
-Affine, RenderContext, Lens, widget::{Label, LabelText}, Insets, Color,};
+Affine, RenderContext, Lens, widget::{Label, LabelText}, Insets, Color, TextAlignment,};
 use druid_color_thesaurus::white;
 
 use crate::{GridItem, snapping::GridSnapData, save_system::SaveSystemData, StackItem, GridAction, GridState, GridIndex, canvas::Canvas,};
@@ -539,6 +539,7 @@ impl<T: Data> GridChild<T> {
         let mut label_text = Label::new(text);
         label_text.set_text_color(white::ALABASTER);
         label_text.set_text_size(16.);
+        label_text.set_text_alignment(TextAlignment::Center);
 
         GridChild {
             label_text,
