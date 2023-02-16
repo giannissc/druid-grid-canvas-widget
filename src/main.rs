@@ -182,19 +182,11 @@ fn main() {
     };
 
     let mut pattern = Vector::new();
-    pattern.push_back(StackItem::Add(GridIndex{row:0, col:0}, GridNodeType::Wall, None));
-    pattern.push_back(StackItem::Add(GridIndex{row:0, col:1}, GridNodeType::Wall, None));
-    pattern.push_back(StackItem::Add(GridIndex{row:0, col:2}, GridNodeType::Wall, None));
-    pattern.push_back(StackItem::Add(GridIndex{row:1, col:0}, GridNodeType::Wall, None));
-    pattern.push_back(StackItem::Add(GridIndex{row:2, col:0}, GridNodeType::Wall, None));
-
-    pattern.push_back(StackItem::Add(GridIndex{row:8, col:1}, GridNodeType::StartNode(1), None));
-    pattern.push_back(StackItem::Add(GridIndex{row:8, col:18}, GridNodeType::TargetNode(1), None));
-    pattern.push_back(StackItem::Add(GridIndex{row:3, col:19}, GridNodeType::TargetNode(1), None));
-    pattern.push_back(StackItem::Add(GridIndex{row:6, col:35}, GridNodeType::TargetNode(1), None));
-
-    pattern.push_back(StackItem::Add(GridIndex { row: 4, col: 4 }, GridNodeType::StartNode(0), None));
-    pattern.push_back(StackItem::Add(GridIndex{row:12, col: 4}, GridNodeType::TargetNode(0), None));
+    // pattern.push_back(StackItem::Add(GridIndex{row:0, col:0}, GridNodeType::Wall, None));
+    // pattern.push_back(StackItem::Add(GridIndex{row:0, col:1}, GridNodeType::Wall, None));
+    // pattern.push_back(StackItem::Add(GridIndex{row:0, col:2}, GridNodeType::Wall, None));
+    // pattern.push_back(StackItem::Add(GridIndex{row:1, col:0}, GridNodeType::Wall, None));
+    // pattern.push_back(StackItem::Add(GridIndex{row:2, col:0}, GridNodeType::Wall, None));
     
     let mut map: HashMap<GridIndex, (GridNodeType<Net>, Option<GridNodeType<Net>>)> = HashMap::new();
 
@@ -223,9 +215,19 @@ fn main() {
     }
 
     pattern.push_back(StackItem::BatchAdd(map));
+
+    pattern.push_back(StackItem::Add(GridIndex { row: 4, col: 4 }, GridNodeType::StartNode(0), None));
+    pattern.push_back(StackItem::Add(GridIndex{row:12, col: 4}, GridNodeType::TargetNode(0), None));
+
+    pattern.push_back(StackItem::Add(GridIndex{row:8, col:1}, GridNodeType::StartNode(1), None));
+    pattern.push_back(StackItem::Add(GridIndex{row:8, col:18}, GridNodeType::TargetNode(1), None));
+    pattern.push_back(StackItem::Add(GridIndex{row:3, col:19}, GridNodeType::TargetNode(1), None));
+    pattern.push_back(StackItem::Add(GridIndex{row:6, col:35}, GridNodeType::TargetNode(1), None));
+
     
     data.grid_data.submit_to_stack_and_process(pattern);
     // data.grid_data.submit_to_stack(pattern);
+
     AppLauncher::with_window(main_window)
         .configure_env(|env, _| {
             env.set(theme::SELECTION_TEXT_COLOR, Color::rgb8(0xA6, 0xCC, 0xFF));

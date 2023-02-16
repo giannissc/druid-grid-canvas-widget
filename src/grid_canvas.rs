@@ -9,7 +9,7 @@ Selector, MouseButton, LifeCycleCtx, LifeCycle, UpdateCtx, LayoutCtx, BoxConstra
 Affine, RenderContext, Lens, widget::{Label, LabelText}, Insets, Color, TextAlignment, Command, WidgetId, Target,};
 use druid_color_thesaurus::white;
 
-use crate::{GridItem, snapping::GridSnapData, save_system::SaveSystemData, StackItem, GridAction, GridState, GridIndex, canvas::Canvas,};
+use crate::{GridItem, snapping::GridSnapData, save_system::SaveSystemData, StackItem, GridAction, GridState, GridIndex, canvas::Canvas, grid_canvas::grid_canvas_data_derived_lenses::grid,};
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -444,36 +444,6 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
 
     fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, data: &GridCanvasData<T>, env: &Env) {
         // println!("Canvas Wrapper ({:?}) Lifecycle: {:?}", ctx.widget_id(), event);
-
-        // if let LifeCycle::Internal(RouteWidgetAdded) = event {
-        //     self.canvas.lifecycle(ctx, &LifeCycle::WidgetAdded, data, env);
-        // }
-        if let LifeCycle::WidgetAdded = event {
-            for index in 0..data.save_data.playback_index {
-                if let Some(item) = data.save_data.save_stack.get(index) {
-                    match item {
-                        StackItem::Add(grid_index, current_item, _) => {
-                            let from = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
-                            let size = Size::new(data.snap_data.cell_size, data.snap_data.cell_size);
-                            let child = GridChild::new(current_item.get_short_text(), current_item.get_color(), size);
-                            self.canvas.add_child(child, from.into());
-                            ctx.children_changed();
-                        },
-                        StackItem::BatchAdd(map) => {
-                            for (grid_index, (current_item, _)) in map {
-                                let from = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
-                                let size = Size::new(data.snap_data.cell_size, data.snap_data.cell_size);
-                                let child = GridChild::new(current_item.get_short_text(), current_item.get_color(), size);
-                                self.canvas.add_child(child, from.into());
-                            }
-                            ctx.children_changed();
-                        },
-                        _ => (),
-                    }
-                }
-            }
-        }
-
         self.canvas.lifecycle(ctx, event, data, env);
     }
 
@@ -487,7 +457,7 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
         // println!("Canvas Children: {:?}\n", self.canvas.children_len());
         
         self.canvas.update(ctx, old_data, data, env);
-        }
+    }
 
     fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &GridCanvasData<T>, env: &Env) -> Size {
         // let origin = Point::new(0., 0.);

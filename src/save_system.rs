@@ -52,7 +52,6 @@ impl<T: Clone + Debug> SaveSystemData<T> {
     pub fn append_and_process(&mut self, other: Vector<T>) {
         let index = self.playback_index;
         let diff = other.len();
-
         self.append(other);
         self.playback_index = index + diff;
     }

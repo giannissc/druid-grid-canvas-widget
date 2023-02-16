@@ -59,6 +59,8 @@ impl<T> Canvas<T>
         let index = self.children.len();
         self.children.insert(index, Child::Explicit { inner, position: from.clone().into()});
         self.position_map.insert(from, index);
+        if let Child::Explicit { inner, position } = self.children.last().unwrap() {
+        }
 
     }
 
