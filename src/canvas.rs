@@ -5,7 +5,6 @@ use druid::im::HashMap;
 use druid::kurbo::Rect;
 use druid::{
     BoxConstraints, Data, Env, Event, EventCtx, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, Size, UpdateCtx, Widget, WidgetPod, Point, WidgetId,};
-use druid_widget_nursery::WidgetExt;
 ///A container that allows for arbitrary layout.
 ///
 ///This widget allows you to lay widgets out at any point, and to allow that positioning to be dependent on the data.
@@ -21,7 +20,7 @@ use druid_widget_nursery::WidgetExt;
 /// 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 #[allow(dead_code)]
-pub struct Canvas<T: Data>
+pub struct Canvas<T>
 {
     children: Vec<Child<T>>,
     position_map: HashMap<PointKey, usize>,
@@ -36,7 +35,7 @@ impl<T: Data> Default for Canvas<T>
     }
 }
 
-impl<T: Data> Canvas<T>
+impl<T> Canvas<T>
 {
     pub fn new() -> Self {
         Self {
@@ -57,7 +56,7 @@ impl<T: Data> Canvas<T>
         if let Some(index) = index {
             self.children.remove(index);
         }
-        let inner: WidgetPod<T, Box<dyn Widget<T>>> = WidgetPod::new(Box::new(child.stack_tooltip("text")));
+        let inner: WidgetPod<T, Box<dyn Widget<T>>> = WidgetPod::new(Box::new(child));
         let index = self.children.len();
         self.children.insert(index, Child::Explicit { inner, position: from.clone().into()});
         self.position_map.insert(from, index);
@@ -66,9 +65,22 @@ impl<T: Data> Canvas<T>
 
     // For index based layout containers the position will be replaced by an index
     pub fn remove_child(&mut self, from: PointKey){
-        let index = self.position_map.remove(&from);
-        if let Some(index) = index {
-            self.children.remove(index);
+        // Swap item at index with last item and then delete 
+        let delete_index = self.position_map.remove(&from);
+        let last_index = self.children.len() - 1;
+        if let Some(delete_index) = delete_index {
+            let child = self.children.remove(last_index);
+            if last_index != delete_index {
+                // Update position map
+                if let Child::Explicit {position, ..} = &child {
+                    let key: PointKey = <Point as Into<PointKey>>::into(*position);
+                    self.position_map.remove(&key);
+                    self.position_map.insert(key, delete_index);
+                }
+                self.children.remove(delete_index);
+                self.children.insert(delete_index, child); 
+                // self.children.remove(index);
+            }
         }
     }
 
@@ -81,13 +93,19 @@ impl<T: Data> Canvas<T>
         let index_to = self.position_map.remove(&to);
         
         if let Some(index) = index_to {
-            println!("Child removed at target positioned");
             self.children.remove(index);
         }
 
-        if let Some(index) = index_from {
-            println!("Location updated");
-            self.position_map.insert(to, index);
+        if let Some(old_index) = index_from {
+            let inner = self.children.remove(old_index);
+            match inner {
+                Child::Explicit { inner, ..} => {
+                    let index = self.children.len();
+                    self.children.insert(index, Child::Explicit { inner, position: to.clone().into()});
+                    self.position_map.insert(from, index);
+                },
+                _ => (),
+            }
         }
     }
 
@@ -127,7 +145,6 @@ impl<T: Data> Widget<T> for Canvas<T>
     }
 
     fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, data: &T, env: &Env) {
-        // println!("Canvas Parent ({:?}) Lifecycle: {:?}", ctx.widget_id(),event);
         for child in self.children.iter_mut().filter_map(|x| x.widget_mut()) {
             child.lifecycle(ctx, event, data, env);
         }
@@ -175,7 +192,7 @@ impl<T: Data> Widget<T> for Canvas<T>
 /// Canvas Child Wrap
 /// 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
-pub enum Child<T: Data> {
+pub enum Child<T> {
     Implicit {
         inner: WidgetPod<T, Box<dyn Widget<T>>>,
         closure: Box<dyn Fn(&T) -> Point>,
