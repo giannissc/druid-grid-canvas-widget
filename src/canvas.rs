@@ -2,7 +2,6 @@
 use std::hash::Hash;
 
 use druid::im::HashMap;
-use druid::kurbo::Rect;
 use druid::{
     BoxConstraints, Data, Env, Event, EventCtx, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, Size, UpdateCtx, Widget, WidgetPod, Point, WidgetId,};
 ///A container that allows for arbitrary layout.

@@ -43,11 +43,11 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>
             grid_item: item_type,
             grid: HashMap::new(),
             save_data: SaveSystemData::new(),
-            snap_data: GridSnapData::new(50.0),
+            snap_data: GridSnapData::new(15.0),
         }
     }
 
-    pub fn with_cell_size(&mut self, cell_size: f64) {
+    pub fn set_cell_size(&mut self, cell_size: f64) {
         self.snap_data.cell_size = cell_size;
     }
 
@@ -538,7 +538,7 @@ impl<T: Data> GridChild<T> {
         // let foo = Label::new(tooltip_text).tooltip();
         let mut label_text = Label::new(text);
         label_text.set_text_color(white::ALABASTER);
-        label_text.set_text_size(16.);
+        label_text.set_text_size(size.width/3.3);
         label_text.set_text_alignment(TextAlignment::Center);
 
         GridChild {
