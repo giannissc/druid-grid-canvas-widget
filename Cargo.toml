@@ -9,11 +9,7 @@ authors = ["John Skottis <giannis.sc@gmail.com>"]
 
 [dependencies]
 druid-color-thesaurus = {git = "https://github.com/giannissc/druid-color-thesaurus.git"}
-druid-widget-nursery = {git = "https://github.com/giannissc/druid-widget-nursery.git"}
+druid-widget-nursery = "0.1.0"
+druid = "0.8.2"
 rand = "0.8.3"
 log = "0.4"
-
-[dependencies.druid]
-git = "https://github.com/linebender/druid"
-rev = "8cac6defdb1ecf537d9b57bdd0aac4365950f2f4" # update this when upgrading to newer druid
-features = ["im"]

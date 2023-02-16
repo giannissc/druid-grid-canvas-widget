@@ -161,7 +161,7 @@ impl<T: Data> Widget<T> for Canvas<T>
 
         for (index, child) in self.children.iter_mut().enumerate() {
             let (origin, _) = child.positioned_layout(ctx, data, env);
-            child.widget_mut().unwrap().set_origin(ctx, data, env, origin);
+            child.widget_mut().unwrap().set_origin(ctx, origin);
             temp.insert(origin.into(), index);
         }
 
@@ -232,13 +232,8 @@ impl<T: Data> Child<T> {
                     env,
                 );
         
-                let point: Point = desired_origin;
-                inner.set_layout_rect(
-                    ctx,
-                    data,
-                    env,
-                    Rect::from_origin_size(point, desired_size),
-                );
+                let origin: Point = desired_origin;
+                inner.set_origin(ctx, origin);
                 (desired_origin, desired_size)
             }
         }
