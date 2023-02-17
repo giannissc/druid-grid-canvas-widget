@@ -9,7 +9,7 @@ Selector, MouseButton, LifeCycleCtx, LifeCycle, UpdateCtx, LayoutCtx, BoxConstra
 Affine, RenderContext, Lens, widget::{Label, LabelText}, Insets, Color, TextAlignment, Command, WidgetId, Target,};
 use druid_color_thesaurus::white;
 
-use crate::{GridItem, snapping::GridSnapData, save_system::SaveSystemData, StackItem, GridAction, GridState, GridIndex, canvas::Canvas, grid_canvas::grid_canvas_data_derived_lenses::grid,};
+use crate::{GridItem, snapping::GridSnapData, save_system::SaveSystemData, StackItem, GridAction, GridState, GridIndex, canvas::Canvas,};
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -158,7 +158,7 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>
                 );
             }
         }
-        
+
         for (pos, (current_item, _)) in &map{
             self.grid.insert(*pos, *current_item);
         }

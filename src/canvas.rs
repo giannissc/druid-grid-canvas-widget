@@ -1,7 +1,7 @@
 //! A widget that allows for arbitrary layout of it's children.
 use std::hash::Hash;
 
-use druid::im::HashMap;
+use druid::im::{HashMap,};
 use druid::{
     BoxConstraints, Data, Env, Event, EventCtx, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, Size, UpdateCtx, Widget, WidgetPod, Point, WidgetId,};
 ///A container that allows for arbitrary layout.
@@ -50,18 +50,27 @@ impl<T> Canvas<T>
     // different containers
     // A third method
     pub fn add_child(&mut self, child: impl Widget<T> + 'static, from: PointKey) {
-        let index = self.position_map.remove(&from);
+        let delete_index = self.position_map.remove(&from);
         
-        if let Some(index) = index {
-            self.children.remove(index);
+        if let Some(delete_index) = delete_index {
+            let last_index = self.children.len() - 1;
+            let child = self.children.remove(last_index);
+            if last_index != delete_index {
+                // Update position map
+                if let Child::Explicit {position, ..} = &child {
+                    let key: PointKey = <Point as Into<PointKey>>::into(*position);
+                    self.position_map.remove(&key);
+                    self.position_map.insert(key, delete_index);
+                }
+                self.children.remove(delete_index);
+                self.children.insert(delete_index, child); 
+            }
         }
+
         let inner: WidgetPod<T, Box<dyn Widget<T>>> = WidgetPod::new(Box::new(child));
         let index = self.children.len();
         self.children.insert(index, Child::Explicit { inner, position: from.clone().into()});
         self.position_map.insert(from, index);
-        if let Child::Explicit { inner, position } = self.children.last().unwrap() {
-        }
-
     }
 
     // For index based layout containers the position will be replaced by an index
@@ -182,8 +191,8 @@ impl<T: Data> Widget<T> for Canvas<T>
     fn paint(&mut self, ctx: &mut PaintCtx, data: &T, env: &Env) {
         //TODO: filter painting based on our extents? (don't draw widgets entirely outside our bounds?)
         //It's the main reason we keep and update the rect
-        for child in self.children.iter_mut().filter_map(|x| x.widget_mut()) {
-            child.paint(ctx, data, env);
+        for child in self.children.iter_mut() {
+            child.widget_mut().unwrap().paint(ctx, data, env);
         }
     }
 }

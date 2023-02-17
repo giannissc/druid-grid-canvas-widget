@@ -52,7 +52,7 @@ impl GridItem for GridNodeType<Net> {
     fn can_add(&self, other: Option<&Self>) -> bool {
         match other {
             None => true,
-            Some(_) => false,
+            Some(_) => true,
         }
     }
 
@@ -225,8 +225,8 @@ fn main() {
     pattern.push_back(StackItem::Add(GridIndex{row:6, col:35}, GridNodeType::TargetNode(1), None));
 
     
-    data.grid_data.submit_to_stack_and_process(pattern);
-    // data.grid_data.submit_to_stack(pattern);
+    // data.grid_data.submit_to_stack_and_process(pattern);
+    data.grid_data.submit_to_stack(pattern);
 
     AppLauncher::with_window(main_window)
         .configure_env(|env, _| {
@@ -288,7 +288,32 @@ fn make_grid_options() -> impl Widget<AppData>{
                     data.grid_data.clear_all(ctx, GRID_ID);
                 }))
                 .with_child(Button::new("Add perimeter").lens(AppData::grid_data).on_click(|ctx, data, _env|{
-                    data.grid_data.add_node_perimeter(GridIndex { row: 5, col: 5 }, 5, 10, GridNodeType::Boundary, ctx, GRID_ID);
+                    data.grid_data.add_node_perimeter(GridIndex { row: 5, col: 5 }, 5, 5, GridNodeType::Boundary, ctx, GRID_ID);
+                }))
+                .with_child(Button::new("Add pattern 1").lens(AppData::grid_data).on_click(|ctx, data, _env|{
+                    let mut pattern = Vector::new();
+                    for col in 35..40 {
+                        for row in 10..15 {
+                            pattern.push_back(StackItem::Add(GridIndex{row, col}, GridNodeType::UnexploredNode(5), None));
+                            pattern.push_back(StackItem::Add(GridIndex{row, col}, GridNodeType::ExploredNode(5), Some(GridNodeType::UnexploredNode(5))));
+                        }
+                    }
+                    
+                    data.grid_data.submit_to_stack(pattern);
+                }))
+                .with_child(Button::new("Add pattern 2").lens(AppData::grid_data).on_click(|ctx, data, _env|{
+                    let mut pattern = Vector::new();
+                    for col in 40..45 {
+                        for row in 10..15 {
+                            pattern.push_back(StackItem::Add(GridIndex{row, col}, GridNodeType::UnexploredNode(5), None));
+                        }
+                    }
+                    for col in 40..45 {
+                        for row in 10..15 {
+                            pattern.push_back(StackItem::Add(GridIndex{row, col}, GridNodeType::ExploredNode(5), Some(GridNodeType::UnexploredNode(5))));
+                        }
+                    }
+                    data.grid_data.submit_to_stack(pattern);
                 }))
         )
         .with_child(
