@@ -10,6 +10,6 @@ authors = ["John Skottis <giannis.sc@gmail.com>"]
 [dependencies]
 druid-color-thesaurus = {git = "https://github.com/giannissc/druid-color-thesaurus.git"}
 druid-widget-nursery = "0.1.0"
-druid = { version = "0.8.2", features = ["im"] }
+druid = { version = "0.8.3", features = ["im"] }
 rand = "0.8.3"
 log = "0.4"
