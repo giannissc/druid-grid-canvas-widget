@@ -6,7 +6,7 @@
 use std::fmt::Debug;
 use druid::{im::{HashMap, HashSet, Vector}, Data, Rect, Point, Size, Widget, EventCtx, Event, Env, 
 Selector, MouseButton, LifeCycleCtx, LifeCycle, UpdateCtx, LayoutCtx, BoxConstraints, PaintCtx, 
-Affine, RenderContext, Lens, widget::{Label, LabelText}, Insets, Color, TextAlignment, Command, WidgetId, Target,};
+Affine, RenderContext, Lens, widget::{Label, LabelText}, Insets, Color, TextAlignment, Command, WidgetId, Target, WidgetPod,};
 use druid_color_thesaurus::white;
 
 use crate::{GridItem, snapping::GridSnapData, save_system::SaveSystemData, StackItem, GridAction, GridState, GridIndex, canvas::Canvas,};
@@ -267,6 +267,7 @@ pub struct GridCanvas<T: GridItem + PartialEq + Debug> where GridCanvasData<T>: 
     // canvas: WidgetPod<GridCanvasData<T>, Canvas<GridCanvasData<T>>>,
     canvas: Canvas<GridCanvasData<T>>,
     previous_playback_index: usize,
+    pub children_changed: bool,
 }
 
 impl<T: Clone + GridItem + Debug> GridCanvas<T> where GridCanvasData<T>: Data {
@@ -278,6 +279,7 @@ impl<T: Clone + GridItem + Debug> GridCanvas<T> where GridCanvasData<T>: Data {
             // canvas: WidgetPod::new(canvas),
             canvas,
             previous_playback_index: 0,
+            children_changed: false,
         }
     }
 
@@ -422,6 +424,8 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
                 if let Some(item) = data.save_data.save_stack.get(index) {
                     item.forward_canvas(&mut self.canvas, data);
                     ctx.children_changed();
+                    // item.forward_canvas(self.canvas.widget_mut(), data);
+                    // self.children_changed = true;
                     ctx.request_paint();
                 }
             }
@@ -430,12 +434,12 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
                 if let Some(item) = data.save_data.save_stack.get(index) {
                     item.reverse_canvas(&mut self.canvas, data);
                     ctx.children_changed();
+                    // item.reverse_canvas(self.canvas.widget_mut(), data);
+                    // self.children_changed = true;
                     ctx.request_paint();
                 }
             }
-        }
-
-        
+        }        
 
         self.previous_playback_index = data.save_data.playback_index;
 
@@ -444,12 +448,17 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
 
     fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, data: &GridCanvasData<T>, env: &Env) {
         // println!("Canvas Wrapper ({:?}) Lifecycle: {:?}", ctx.widget_id(), event);
+        // TODO: Handle ViewContext Changed
+        if let LifeCycle::WidgetAdded = event {
+            println!("GridCanvas received WidgetAdded");
+            ctx.children_changed();
+        }
+
         self.canvas.lifecycle(ctx, event, data, env);
     }
 
     fn update(&mut self, ctx: &mut UpdateCtx, old_data: &GridCanvasData<T>, data: &GridCanvasData<T>, env: &Env){
         // println!("Canvas Wrapper Update");
-        // self.canvas.update(ctx, data, env);
         // println!("=====================================");
         // println!("Old Grid | {:?} vs {:?} | New Grid", old_data.grid.len(), data.grid.len());
         // println!("Old Save | {:?} vs {:?} | New Save", old_data.save_data.save_stack.len(), data.save_data.save_stack.len());
@@ -457,6 +466,12 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
         // println!("Canvas Children: {:?}\n", self.canvas.children_len());
         
         self.canvas.update(ctx, old_data, data, env);
+        // self.canvas.update(ctx, data, env);
+
+        if self.children_changed {
+            ctx.children_changed();
+            self.children_changed = false
+        }
     }
 
     fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &GridCanvasData<T>, env: &Env) -> Size {
@@ -464,16 +479,11 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
         //debug!("Box constraints width: {:?}", bc.max().width);
         //debug!("Box constraints height: {:?}", bc.max().height);
         self.canvas.layout(ctx, bc, data, env);
-        // self.canvas.set_origin(ctx, data, env, origin);
+        
+        // self.canvas.set_origin(ctx, data.snap_data.pan_data.absolute_offset);
 
 
-        let width = bc.max().width;
-        let height = bc.max().height;
-
-        Size {
-            width: width,
-            height: height,
-        }
+        bc.max()
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, data: &GridCanvasData<T>, env: &Env) {

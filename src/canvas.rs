@@ -155,6 +155,11 @@ impl<T: Data> Widget<T> for Canvas<T>
     }
 
     fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, data: &T, env: &Env) {
+        if let LifeCycle::WidgetAdded = event {
+            println!("Canvas received WidgetAdded");
+            ctx.children_changed();
+        }
+
         for child in self.children.iter_mut().filter_map(|x| x.widget_mut()) {
             child.lifecycle(ctx, event, data, env);
         }
@@ -179,12 +184,12 @@ impl<T: Data> Widget<T> for Canvas<T>
 
         //We always take the max size.
         let size = bc.max();
-        if size.width.is_infinite() {
-            log::warn!("Infinite width passed to Canvas");
-        }
-        if size.height.is_infinite() {
-            log::warn!("Infinite height passed to Canvas");
-        }
+        // if size.width.is_infinite() {
+        //     log::warn!("Infinite width passed to Canvas");
+        // }
+        // if size.height.is_infinite() {
+        //     log::warn!("Infinite height passed to Canvas");
+        // }
         size
     }
 
