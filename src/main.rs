@@ -124,12 +124,12 @@ impl ZoomDataAccess for AppData {
 }
 
 impl PanDataAccess for AppData {
-    fn get_absolute_offset(&self) -> druid::Point {
-        self.grid_data.snap_data.pan_data.absolute_offset
+    fn get_offset(&self) -> druid::Point {
+        self.grid_data.snap_data.pan_data.offset
     }
 
-    fn set_absolute_offset(&mut self, offset: druid::Point) {
-        self.grid_data.snap_data.pan_data.absolute_offset = offset
+    fn set_offset(&mut self, offset: druid::Point) {
+        self.grid_data.snap_data.pan_data.offset = offset
     }
 }
 

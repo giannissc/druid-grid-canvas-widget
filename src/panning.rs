@@ -12,30 +12,30 @@ use log::debug;
 /// 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 pub trait PanDataAccess {
-fn get_absolute_offset(&self) -> Point;
-fn set_absolute_offset(&mut self, offset: Point);
+fn get_offset(&self) -> Point;
+fn set_offset(&mut self, offset: Point);
 }
 
 #[derive(Clone, Data, Lens, PartialEq, Debug)]
 pub struct PanData where PanData:PanDataAccess {
-    pub absolute_offset: Point,
+    pub offset: Point,
 }
 
 impl PanData {
     pub fn new() -> Self {
         Self {
-            absolute_offset: Point::new(0.0,0.0),
+            offset: Point::new(0.0,0.0),
         }
     }
 }
 
 impl PanDataAccess for PanData {
-    fn get_absolute_offset(&self) -> Point {
-        self.absolute_offset
+    fn get_offset(&self) -> Point {
+        self.offset
     }
 
-    fn set_absolute_offset(&mut self, offset: Point) {
-        self.absolute_offset = offset;
+    fn set_offset(&mut self, offset: Point) {
+        self.offset = offset;
     }
 }
 
@@ -93,7 +93,7 @@ impl<T: Data + PanDataAccess, W: Widget<T>> Controller<T, W> for PanController {
                     self.start_mouse_position = Some(mouse_event.window_pos);
                     self.previous_mouse_position = Some(mouse_event.window_pos);
                     // self.start_offset = data.absolute_offset;
-                    self.start_offset = data.get_absolute_offset();
+                    self.start_offset = data.get_offset();
                     debug!("Start offset: {:?}", self.start_offset);
                     ctx.set_active(true);
                     ctx.request_focus();
@@ -121,7 +121,7 @@ impl<T: Data + PanDataAccess, W: Widget<T>> Controller<T, W> for PanController {
                     }
 
                     // data.absolute_offset = offset;
-                    data.set_absolute_offset(offset);
+                    data.set_offset(offset);
                     ctx.set_handled();
                     // debug!("Current delta: {:?}", data.relative_offset);
                 }
