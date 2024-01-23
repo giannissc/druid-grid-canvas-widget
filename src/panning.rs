@@ -14,21 +14,17 @@ use log::debug;
 pub trait PanDataAccess {
 fn get_absolute_offset(&self) -> Point;
 fn set_absolute_offset(&mut self, offset: Point);
-fn get_relative_offset(&self) -> Vec2;
-fn set_relative_offset(&mut self, offset: Vec2);
 }
 
 #[derive(Clone, Data, Lens, PartialEq, Debug)]
 pub struct PanData where PanData:PanDataAccess {
     pub absolute_offset: Point,
-    pub relative_offset: Vec2,
 }
 
 impl PanData {
     pub fn new() -> Self {
         Self {
             absolute_offset: Point::new(0.0,0.0),
-            relative_offset: Vec2::new(0.0, 0.0),
         }
     }
 }
@@ -40,14 +36,6 @@ impl PanDataAccess for PanData {
 
     fn set_absolute_offset(&mut self, offset: Point) {
         self.absolute_offset = offset;
-    }
-
-    fn get_relative_offset(&self) -> Vec2 {
-        self.relative_offset
-    }
-
-    fn set_relative_offset(&mut self, offset: Vec2) {
-        self.relative_offset = offset
     }
 }
 
@@ -116,8 +104,6 @@ impl<T: Data + PanDataAccess, W: Widget<T>> Controller<T, W> for PanController {
                 if let (Some(start_mouse_position), Some(previous_mouse_position)) = (self.start_mouse_position, self.previous_mouse_position) {
                     // Calculate delta from current position
                     release_delta = mouse_event.window_pos - start_mouse_position;
-                    // data.relative_offset = mouse_event.window_pos - previous_mouse_position;
-                    data.set_relative_offset(mouse_event.window_pos - previous_mouse_position);
                     let mut offset = self.start_offset + release_delta;
 
                     self.previous_mouse_position = Some(mouse_event.window_pos);

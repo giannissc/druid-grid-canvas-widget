@@ -117,14 +117,6 @@ impl PanDataAccess for GridSnapData {
     fn set_absolute_offset(&mut self, offset: Point) {
         self.pan_data.absolute_offset = offset;
     }
-
-    fn get_relative_offset(&self) -> druid::Vec2 {
-        self.pan_data.relative_offset
-    }
-
-    fn set_relative_offset(&mut self, offset: druid::Vec2) {
-        self.pan_data.relative_offset = offset;
-    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
