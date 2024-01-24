@@ -6,8 +6,9 @@
 use std::fmt::Debug;
 use druid::{im::{HashMap, HashSet, Vector}, Data, Rect, Point, Size, Widget, EventCtx, Event, Env, 
 Selector, MouseButton, LifeCycleCtx, LifeCycle, UpdateCtx, LayoutCtx, BoxConstraints, PaintCtx, 
-Affine, RenderContext, Lens, widget::{Label, LabelText}, Insets, Color, TextAlignment, Command, WidgetId, Target, WidgetPod,};
+Affine, RenderContext, Lens, widget::{Label, LabelText}, Insets, Color, TextAlignment, Command, WidgetId, Target, WidgetPod, platform_menus::mac::file::print,};
 use druid_color_thesaurus::white;
+use log::debug;
 
 use crate::{GridItem, snapping::GridSnapData, save_system::SaveSystemData, StackItem, GridAction, GridState, GridIndex, canvas::Canvas,};
 
@@ -472,16 +473,21 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
             ctx.children_changed();
             self.children_changed = false
         }
+
+        if old_data.snap_data.pan_data.offset != data.snap_data.pan_data.offset || old_data.snap_data.zoom_data.zoom_scale != data.snap_data.zoom_data.zoom_scale {
+            ctx.request_layout()
+        }
     }
 
     fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &GridCanvasData<T>, env: &Env) -> Size {
         // let origin = Point::new(0., 0.);
         //debug!("Box constraints width: {:?}", bc.max().width);
         //debug!("Box constraints height: {:?}", bc.max().height);
+        self.canvas.offset = data.snap_data.pan_data.offset;
+        self.canvas.scale = data.snap_data.zoom_data.zoom_scale;
         self.canvas.layout(ctx, bc, data, env);
         
         // self.canvas.set_origin(ctx, data.snap_data.pan_data.absolute_offset);
-
 
         bc.max()
     }
@@ -493,14 +499,12 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
         // let damage_region = ctx.region().clone();
         // Calculate area to render
         // let paint_rectangles = damage_region.rects();
-        // let size = ctx.size();
 
 
         ctx.with_save(|ctx| {
-            let translate = Affine::translate(data.snap_data.pan_data.absolute_offset.to_vec2());
             let scale = Affine::scale(data.snap_data.zoom_data.zoom_scale);
             
-            ctx.transform(translate);
+            // ctx.transform(translate);
             ctx.transform(scale);
 
             // self.canvas.paint_always(ctx, data, env);

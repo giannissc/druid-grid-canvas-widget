@@ -24,6 +24,8 @@ pub struct Canvas<T>
     children: Vec<Child<T>>,
     position_map: HashMap<PointKey, usize>,
     id_map: HashMap<WidgetId, usize>,
+    pub offset: Point,
+    pub scale: f64,
 }
 
 
@@ -41,6 +43,8 @@ impl<T> Canvas<T>
             children: vec![],
             position_map: HashMap::new(),
             id_map: HashMap::new(),
+            offset: Point::ZERO,
+            scale: 1.,
         }
     }
 
@@ -176,7 +180,8 @@ impl<T: Data> Widget<T> for Canvas<T>
 
         for (index, child) in self.children.iter_mut().enumerate() {
             let (origin, _) = child.positioned_layout(ctx, data, env);
-            child.widget_mut().unwrap().set_origin(ctx, origin);
+            let absolute_origin = (self.offset.to_vec2() / self.scale + origin.to_vec2());
+            child.widget_mut().unwrap().set_origin(ctx, absolute_origin.to_point());
             temp.insert(origin.into(), index);
         }
 

@@ -60,8 +60,8 @@ impl ZoomController {
 impl Default for ZoomController {
     fn default() -> Self {
         Self {
-            min_zoom_scale: 0.9,
-            max_zoom_scale: 8.,
+            min_zoom_scale: 0.,
+            max_zoom_scale: 4.,
             zoom_step: 0.05,
         }
     }
