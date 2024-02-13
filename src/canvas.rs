@@ -23,7 +23,6 @@ pub struct Canvas<T>
 {
     children: Vec<Child<T>>,
     position_map: HashMap<PointKey, usize>,
-    id_map: HashMap<WidgetId, usize>,
     pub offset: Point,
     pub scale: f64,
 }
@@ -42,7 +41,6 @@ impl<T> Canvas<T>
         Self {
             children: vec![],
             position_map: HashMap::new(),
-            id_map: HashMap::new(),
             offset: Point::ZERO,
             scale: 1.,
         }
