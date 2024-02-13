@@ -10,7 +10,7 @@ Affine, RenderContext, Lens, widget::{Label, LabelText}, Insets, Color, TextAlig
 use druid_color_thesaurus::white;
 use log::debug;
 
-use crate::{canvas::{Canvas, Child, PointKey}, save_system::SaveSystemData, snapping::GridSnapData, GridAction, GridIndex, GridItem, GridState, StackItem};
+use crate::{canvas::{Canvas, Child, PointKey}, cassette::Cassette, snapping::GridSnapData, GridAction, GridIndex, GridItem, GridState, StackItem};
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,7 +33,7 @@ pub struct GridCanvasData<T: GridItem + PartialEq + Debug>{
     pub grid_item: T,
     pub grid: HashMap<GridIndex, T>,
     // Data Hierarchy
-    pub(crate) save_data: SaveSystemData<StackItem<T>>,
+    pub(crate) save_data: Cassette<StackItem<T>>,
     pub snap_data: GridSnapData,
 }
 
@@ -43,7 +43,7 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>
             action: GridAction::Dynamic,
             grid_item: item_type,
             grid: HashMap::new(),
-            save_data: SaveSystemData::new(),
+            save_data: Cassette::new(),
             snap_data: GridSnapData::new(15.0),
         }
     }
@@ -65,7 +65,7 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>
         
         if item.can_add(option){
             self.grid.insert(*pos, item);
-            self.save_data.submit_and_process(command_item);
+            self.save_data.insert_and_play(command_item);
             return true;
         }
         false
@@ -75,7 +75,7 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>
         if let Some(item) = self.grid.remove(pos){
             if item.can_remove(){
                 let command_item = StackItem::Remove(*pos, item);
-                self.save_data.submit_and_process(command_item);
+                self.save_data.insert_and_play(command_item);
                 return true;
             } else {
                 self.grid.insert(*pos, item);
@@ -90,7 +90,7 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>
             let item = self.grid.remove(from).unwrap();
             self.grid.insert(*to, item);
             let command_item = StackItem::Move(*from, *to, item);
-            self.save_data.submit_and_process(command_item);
+            self.save_data.insert_and_play(command_item);
             return true;
         }
         false
@@ -163,14 +163,14 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>
         for (pos, (current_item, _)) in &map{
             self.grid.insert(*pos, *current_item);
         }
-        self.save_data.submit_and_process(StackItem::BatchAdd(map));
+        self.save_data.insert_and_play(StackItem::BatchAdd(map));
         ctx.submit_command(Command::new(TRIGGER_CHANGE, (), Target::Widget(id)));
 
     }
 
     // Clear Grid methods
     pub fn clear_all(&mut self, ctx: &mut EventCtx, id: WidgetId){
-        self.save_data.submit_and_process(StackItem::BatchRemove(self.grid.clone()));
+        self.save_data.insert_and_play(StackItem::BatchRemove(self.grid.clone()));
         self.grid.clear();
         ctx.submit_command(Command::new(TRIGGER_CHANGE, (), Target::Widget(id)));
     }
@@ -186,7 +186,7 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>
                 }
             })
         }
-        self.save_data.submit_and_process(StackItem::BatchRemove(map));
+        self.save_data.insert_and_play(StackItem::BatchRemove(map));
         ctx.submit_command(Command::new(TRIGGER_CHANGE, (), Target::Widget(id)));
     }
     pub fn clear_only(&mut self, set: HashSet<T>, ctx: &mut EventCtx, id: WidgetId){
@@ -201,7 +201,7 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>
                 }
             })
         }
-        self.save_data.submit_and_process(StackItem::BatchRemove(map));
+        self.save_data.insert_and_play(StackItem::BatchRemove(map));
         ctx.submit_command(Command::new(TRIGGER_CHANGE, (), Target::Widget(id)));
     }
 
@@ -249,7 +249,7 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>
         for (pos, item) in pos_map.iter(){
             self.grid.insert(*pos, *item);
         }
-        self.save_data.append_and_process(save_list);
+        self.save_data.append_and_play(save_list);
     }
 }
 
@@ -507,7 +507,7 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
         let is_forward =  (data.save_data.playback_index as isize - self.previous_playback_index as isize) >= 0;
         if is_forward {
             for index in self.previous_playback_index..data.save_data.playback_index {
-                if let Some(item) = data.save_data.save_stack.get(index) {
+                if let Some(item) = data.save_data.tape.get(index) {
                     item.forward_canvas(self, data);
                     ctx.children_changed();
                     // item.forward_canvas(self.canvas.widget_mut(), data);
@@ -517,7 +517,7 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
             }
         } else {
             for index in (data.save_data.playback_index..self.previous_playback_index).rev() {
-                if let Some(item) = data.save_data.save_stack.get(index) {
+                if let Some(item) = data.save_data.tape.get(index) {
                     item.reverse_canvas(self, data);
                     ctx.children_changed();
                     // item.reverse_canvas(self.canvas.widget_mut(), data);

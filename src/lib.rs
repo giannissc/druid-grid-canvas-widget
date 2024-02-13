@@ -20,7 +20,7 @@ pub mod zooming;
 pub mod snapping;
 pub mod rotation;
 pub mod canvas;
-pub mod save_system;
+pub mod cassette;
 pub mod grid_canvas;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

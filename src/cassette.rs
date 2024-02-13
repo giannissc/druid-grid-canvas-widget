@@ -12,44 +12,44 @@ use std::fmt::Debug;
 /// 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 #[derive(Clone, Data, Lens, PartialEq, Debug)]
-pub struct SaveSystemData<T: Clone + Debug> {
-    pub save_stack: Vector<T>,
+pub struct Cassette<T: Clone + Debug> {
+    pub tape: Vector<T>,
     pub playback_index: usize,
 }
 
-impl<T: Clone + Debug> SaveSystemData<T> {
+impl<T: Clone + Debug> Cassette<T> {
     pub fn new() -> Self {
         Self {
-            save_stack: Vector::new(),
+            tape: Vector::new(),
             playback_index: 0,
         }
     }
 
-    pub fn submit(&mut self, item: T){
+    pub fn insert(&mut self, item: T){
         let playback_index = self.playback_index;
 
-        if playback_index != self.save_stack.len() {
-            self.save_stack = self.save_stack.slice(0..playback_index);
+        if playback_index != self.tape.len() {
+            self.tape = self.tape.slice(0..playback_index);
         }
-        self.save_stack.push_back(item);
+        self.tape.push_back(item);
     }
     
-    pub fn submit_and_process(&mut self, item: T) {
+    pub fn insert_and_play(&mut self, item: T) {
         let index = self.playback_index;
-        self.submit(item);
+        self.insert(item);
         self.playback_index = index + 1
     }
 
     pub fn append(&mut self, other: Vector<T>) {
         let playback_index = self.playback_index;
 
-        if playback_index != self.save_stack.len(){
-            self.save_stack = self.save_stack.slice(0..playback_index)
+        if playback_index != self.tape.len(){
+            self.tape = self.tape.slice(0..playback_index)
         }
-        self.save_stack.append(other);
+        self.tape.append(other);
     }
 
-    pub fn append_and_process(&mut self, other: Vector<T>) {
+    pub fn append_and_play(&mut self, other: Vector<T>) {
         let index = self.playback_index;
         let diff = other.len();
         self.append(other);
@@ -57,33 +57,18 @@ impl<T: Clone + Debug> SaveSystemData<T> {
     }
 
     pub fn undo(&mut self) -> Option<&T> {
-        let playback_index = self.playback_index;
-
-        if playback_index != 0 {
-            self.playback_index = playback_index - 1;
-            return self.save_stack.get(self.playback_index);
+        if self.playback_index != 0 {
+            self.playback_index = self.playback_index - 1;
+            return self.tape.get(self.playback_index);
         }
         None
     }
     
     pub fn redo(&mut self) -> Option<&T> {
-        let playback_index = self.playback_index;
-
-        if playback_index != self.save_stack.len() {
-            self.playback_index = playback_index + 1;
-            return self.save_stack.get(self.playback_index-1);
+        if self.playback_index != self.tape.len() {
+            self.playback_index = self.playback_index + 1;
+            return self.tape.get(self.playback_index-1);
         }
         None
     }
-    
-    #[allow(dead_code)]
-    fn save(&mut self){
-        todo!()
-    }
-
-    #[allow(dead_code)]
-    fn restore(&mut self){
-        todo!()
-    }
-
 }
