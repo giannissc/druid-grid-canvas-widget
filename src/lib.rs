@@ -8,7 +8,7 @@ use std::fmt::Debug;
 use canvas::Canvas;
 use druid::{Data, Color, Size,};
 use druid::im::{HashMap, HashSet};
-use grid_canvas::{GridCanvasData, GridChild};
+use grid_canvas::{GridCanvas, GridCanvasData, GridChild};
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 /// 
@@ -149,7 +149,7 @@ pub enum StackItem<T: GridItem>{
     BatchRemove(HashMap<GridIndex, T>),
 }
 
-impl<T: GridItem + Debug> StackItem<T> where GridCanvasData<T>: Data{
+impl<T: GridItem + Debug + PartialEq> StackItem<T> where GridCanvasData<T>: Data{
     fn get_positions(&self) -> HashSet<GridIndex>{
         let mut set: HashSet<GridIndex> = HashSet::new();
         
@@ -230,7 +230,7 @@ impl<T: GridItem + Debug> StackItem<T> where GridCanvasData<T>: Data{
         }
     }
 
-    fn forward_canvas(&self, canvas: &mut Canvas<GridCanvasData<T>>, data: &GridCanvasData<T>){
+    fn forward_canvas(&self, canvas: &mut GridCanvas<T>, data: &GridCanvasData<T>){
         let size = Size::new(data.snap_data.cell_size, data.snap_data.cell_size);
         match self{
             StackItem::Add(grid_index, current_item, _) => {
@@ -263,7 +263,7 @@ impl<T: GridItem + Debug> StackItem<T> where GridCanvasData<T>: Data{
         }
     }
 
-    fn reverse_canvas(&self, canvas: &mut Canvas<GridCanvasData<T>>, data: &GridCanvasData<T>){   
+    fn reverse_canvas(&self, canvas: &mut GridCanvas<T>, data: &GridCanvasData<T>){   
         let size = Size::new(data.snap_data.cell_size, data.snap_data.cell_size);    
         match self{
             StackItem::Add(grid_index, _, previous_item) => {

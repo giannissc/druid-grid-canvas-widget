@@ -10,7 +10,7 @@ Affine, RenderContext, Lens, widget::{Label, LabelText}, Insets, Color, TextAlig
 use druid_color_thesaurus::white;
 use log::debug;
 
-use crate::{GridItem, snapping::GridSnapData, save_system::SaveSystemData, StackItem, GridAction, GridState, GridIndex, canvas::Canvas,};
+use crate::{canvas::{Canvas, Child, PointKey}, save_system::SaveSystemData, snapping::GridSnapData, GridAction, GridIndex, GridItem, GridState, StackItem};
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -258,7 +258,6 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>
 /// GridCanvas Widget
 /// 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
-
 // TODO: Keep as widget to perform scaling/translation of child children paint methods
 // TODO: Move Snapping System out of main to lib and attach to Canvas
 // TODO: Add canvas to grid widget
@@ -290,6 +289,92 @@ impl<T: Clone + GridItem + Debug> GridCanvas<T> where GridCanvasData<T>: Data {
             y: cell_size * pos.row as f64,
         };
         Rect::from_origin_size(point, Size {width: cell_size, height: cell_size })
+    }
+
+    // For index based layout containers the position will be replaced by an index
+    // Might need two variants for this: add and add_relocate in case you don't want 
+    // to remove the the exist at the to position. Useful for drag and drop between
+    // different containers
+    // A third method
+    pub fn add_child(&mut self, child: impl Widget<GridCanvasData<T>> + 'static, from: PointKey) {
+        let delete_index = self.canvas.position_map.remove(&from);
+        
+        if let Some(delete_index) = delete_index {
+            let last_index = self.canvas.children.len() - 1;
+            let child = self.canvas.children.remove(last_index);
+            if last_index != delete_index {
+                // Update position map
+                if let Child::Explicit {position, ..} = &child {
+                    let key: PointKey = <Point as Into<PointKey>>::into(*position);
+                    self.canvas.position_map.remove(&key);
+                    self.canvas.position_map.insert(key, delete_index);
+                }
+                self.canvas.children.remove(delete_index);
+                self.canvas.children.insert(delete_index, child); 
+            }
+        }
+
+        let inner: WidgetPod<GridCanvasData<T>, Box<dyn Widget<GridCanvasData<T>>>> = WidgetPod::new(Box::new(child));
+        let index = self.canvas.children.len();
+        self.canvas.children.insert(index, Child::Explicit { inner, position: from.clone().into()});
+        self.canvas.position_map.insert(from, index);
+    }
+
+    // For index based layout containers the position will be replaced by an index
+    pub fn remove_child(&mut self, from: PointKey){
+        // Swap item at index with last item and then delete 
+        let delete_index = self.canvas.position_map.remove(&from);
+        let last_index = self.canvas.children.len() - 1;
+        if let Some(delete_index) = delete_index {
+            let child = self.canvas.children.remove(last_index);
+            if last_index != delete_index {
+                // Update position map
+                if let Child::Explicit {position, ..} = &child {
+                    let key: PointKey = <Point as Into<PointKey>>::into(*position);
+                    self.canvas.position_map.remove(&key);
+                    self.canvas.position_map.insert(key, delete_index);
+                }
+                self.canvas.children.remove(delete_index);
+                self.canvas.children.insert(delete_index, child); 
+                // self.children.remove(index);
+            }
+        }
+    }
+
+    // For index based layout containers the position will be replaced by an index
+    // Might need two variants for this: move and move_relocate in case you don't want 
+    // to remove the the exist at the to position. Useful for drag and drop within the 
+    // same container
+    pub fn move_child(&mut self, from: PointKey, to: PointKey){
+        let index_from = self.canvas.position_map.remove(&from);
+        let index_to = self.canvas.position_map.remove(&to);
+        
+        if let Some(index) = index_to {
+            self.canvas.children.remove(index);
+        }
+
+        if let Some(old_index) = index_from {
+            let inner = self.canvas.children.remove(old_index);
+            match inner {
+                Child::Explicit { inner, ..} => {
+                    let index = self.canvas.children.len();
+                    self.canvas.children.insert(index, Child::Explicit { inner, position: to.clone().into()});
+                    self.canvas.position_map.insert(from, index);
+                },
+                _ => (),
+            }
+        }
+    }
+
+    // For index based layout containers the position will be replaced by an index
+    // Can be useful for drag and drop operations within the same container
+    pub fn exchange_child(&mut self, from: PointKey, to: PointKey){
+        let index_from = self.canvas.position_map.remove(&from);
+        let index_to = self.canvas.position_map.remove(&to);
+        if let (Some(index_from), Some(index_to)) = (index_from, index_to) {
+            self.canvas.position_map.insert(to, index_from);
+            self.canvas.position_map.insert(from, index_to);
+        }
     }
 }
 
@@ -423,7 +508,7 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
         if is_forward {
             for index in self.previous_playback_index..data.save_data.playback_index {
                 if let Some(item) = data.save_data.save_stack.get(index) {
-                    item.forward_canvas(&mut self.canvas, data);
+                    item.forward_canvas(self, data);
                     ctx.children_changed();
                     // item.forward_canvas(self.canvas.widget_mut(), data);
                     // self.children_changed = true;
@@ -433,7 +518,7 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
         } else {
             for index in (data.save_data.playback_index..self.previous_playback_index).rev() {
                 if let Some(item) = data.save_data.save_stack.get(index) {
-                    item.reverse_canvas(&mut self.canvas, data);
+                    item.reverse_canvas(self, data);
                     ctx.children_changed();
                     // item.reverse_canvas(self.canvas.widget_mut(), data);
                     // self.children_changed = true;
@@ -584,7 +669,7 @@ impl<T:Data> Widget<T> for GridChild<T> {
         ctx.fill(rect, &self.color);
 
         let label_offset = (size.to_vec2() - self.label_size.to_vec2()) / 2.0;
-
+        println!("Label Paint");
         ctx.with_save(|ctx| {
             ctx.transform(Affine::translate(label_offset));
             self.label_text.paint(ctx, data, env);

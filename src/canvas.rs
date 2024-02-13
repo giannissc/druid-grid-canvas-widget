@@ -21,8 +21,8 @@ use druid::{
 #[allow(dead_code)]
 pub struct Canvas<T>
 {
-    children: Vec<Child<T>>,
-    position_map: HashMap<PointKey, usize>,
+    pub children: Vec<Child<T>>,
+    pub position_map: HashMap<PointKey, usize>,
     pub offset: Point,
     pub scale: f64,
 }
@@ -45,105 +45,6 @@ impl<T> Canvas<T>
             scale: 1.,
         }
     }
-
-    // For index based layout containers the position will be replaced by an index
-    // Might need two variants for this: add and add_relocate in case you don't want 
-    // to remove the the exist at the to position. Useful for drag and drop between
-    // different containers
-    // A third method
-    pub fn add_child(&mut self, child: impl Widget<T> + 'static, from: PointKey) {
-        let delete_index = self.position_map.remove(&from);
-        
-        if let Some(delete_index) = delete_index {
-            let last_index = self.children.len() - 1;
-            let child = self.children.remove(last_index);
-            if last_index != delete_index {
-                // Update position map
-                if let Child::Explicit {position, ..} = &child {
-                    let key: PointKey = <Point as Into<PointKey>>::into(*position);
-                    self.position_map.remove(&key);
-                    self.position_map.insert(key, delete_index);
-                }
-                self.children.remove(delete_index);
-                self.children.insert(delete_index, child); 
-            }
-        }
-
-        let inner: WidgetPod<T, Box<dyn Widget<T>>> = WidgetPod::new(Box::new(child));
-        let index = self.children.len();
-        self.children.insert(index, Child::Explicit { inner, position: from.clone().into()});
-        self.position_map.insert(from, index);
-    }
-
-    // For index based layout containers the position will be replaced by an index
-    pub fn remove_child(&mut self, from: PointKey){
-        // Swap item at index with last item and then delete 
-        let delete_index = self.position_map.remove(&from);
-        let last_index = self.children.len() - 1;
-        if let Some(delete_index) = delete_index {
-            let child = self.children.remove(last_index);
-            if last_index != delete_index {
-                // Update position map
-                if let Child::Explicit {position, ..} = &child {
-                    let key: PointKey = <Point as Into<PointKey>>::into(*position);
-                    self.position_map.remove(&key);
-                    self.position_map.insert(key, delete_index);
-                }
-                self.children.remove(delete_index);
-                self.children.insert(delete_index, child); 
-                // self.children.remove(index);
-            }
-        }
-    }
-
-    // For index based layout containers the position will be replaced by an index
-    // Might need two variants for this: move and move_relocate in case you don't want 
-    // to remove the the exist at the to position. Useful for drag and drop within the 
-    // same container
-    pub fn move_child(&mut self, from: PointKey, to: PointKey){
-        let index_from = self.position_map.remove(&from);
-        let index_to = self.position_map.remove(&to);
-        
-        if let Some(index) = index_to {
-            self.children.remove(index);
-        }
-
-        if let Some(old_index) = index_from {
-            let inner = self.children.remove(old_index);
-            match inner {
-                Child::Explicit { inner, ..} => {
-                    let index = self.children.len();
-                    self.children.insert(index, Child::Explicit { inner, position: to.clone().into()});
-                    self.position_map.insert(from, index);
-                },
-                _ => (),
-            }
-        }
-    }
-
-    // For index based layout containers the position will be replaced by an index
-    // Can be useful for drag and drop operations within the same container
-    pub fn exchange_child(&mut self, from: PointKey, to: PointKey){
-        let index_from = self.position_map.remove(&from);
-        let index_to = self.position_map.remove(&to);
-        if let (Some(index_from), Some(index_to)) = (index_from, index_to) {
-            self.position_map.insert(to, index_from);
-            self.position_map.insert(from, index_to);
-        }
-    }
-
-    pub fn children_len(&self) -> usize {
-        self.children.len()
-    }
-    // pub fn children_mut(&mut self, ctx: &mut EventCtx) -> &mut Vec<WidgetPod<T, Box<dyn Widget<T>>>> {
-    //     ctx.children_changed();
-    //     self.children.borrow_mut()
-    // }
-    
-    // pub fn children(&self) -> &Vec<WidgetPod<T, Box<dyn Widget<T>>>> {
-    //     self.children.borrow()
-    // }
-
 }
 
 impl<T: Data> Widget<T> for Canvas<T>
@@ -186,14 +87,7 @@ impl<T: Data> Widget<T> for Canvas<T>
         self.position_map = temp;
 
         //We always take the max size.
-        let size = bc.max();
-        // if size.width.is_infinite() {
-        //     log::warn!("Infinite width passed to Canvas");
-        // }
-        // if size.height.is_infinite() {
-        //     log::warn!("Infinite height passed to Canvas");
-        // }
-        size
+        bc.max()
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, data: &T, env: &Env) {
