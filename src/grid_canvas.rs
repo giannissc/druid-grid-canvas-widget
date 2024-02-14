@@ -6,9 +6,8 @@
 use std::fmt::Debug;
 use druid::{im::{HashMap, HashSet, Vector}, Data, Rect, Point, Size, Widget, EventCtx, Event, Env, 
 Selector, MouseButton, LifeCycleCtx, LifeCycle, UpdateCtx, LayoutCtx, BoxConstraints, PaintCtx, 
-Affine, RenderContext, Lens, widget::{Label, LabelText}, Insets, Color, TextAlignment, Command, WidgetId, Target, WidgetPod, platform_menus::mac::file::print,};
+Affine, RenderContext, Lens, widget::{Label, LabelText}, Insets, Color, TextAlignment, WidgetPod,};
 use druid_color_thesaurus::white;
-use log::debug;
 
 use crate::{canvas::{Canvas, Child, PointKey}, cassette::Cassette, snapping::GridSnapData, GridAction, GridIndex, GridItem, GridState, StackItem};
 
@@ -20,7 +19,6 @@ use crate::{canvas::{Canvas, Child, PointKey}, cassette::Cassette, snapping::Gri
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 pub const SET_DISABLED: Selector = Selector::new("disabled-grid-state");
 pub const SET_ENABLED: Selector = Selector::new("idle-grid-state");
-pub const TRIGGER_CHANGE: Selector = Selector::new("update-grid-playback");
 
 //////////////////////////////////////////////////////////////////////////////////////
 //
@@ -33,7 +31,7 @@ pub struct GridCanvasData<T: GridItem + PartialEq + Debug>{
     pub grid_item: T,
     pub grid: HashMap<GridIndex, T>,
     // Data Hierarchy
-    pub(crate) save_data: Cassette<StackItem<T>>,
+    pub save_data: Cassette<StackItem<T>>,
     pub snap_data: GridSnapData,
 }
 
@@ -95,23 +93,6 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>
         }
         false
     }
-
-    pub fn undo(&mut self, ctx: &mut EventCtx, id: WidgetId){
-        let item = self.save_data.undo();
-        if let Some(item) = item {
-            item.reverse_grid(&mut self.grid);
-        }
-        ctx.submit_command(Command::new(TRIGGER_CHANGE, (), Target::Widget(id)));
-    }
-
-    pub fn redo(&mut self, ctx: &mut EventCtx, id: WidgetId){
-        let item = self.save_data.redo();
-        if let Some(item) = item {
-            item.forward_grid(&mut self.grid);
-            
-        }
-        ctx.submit_command(Command::new(TRIGGER_CHANGE, (), Target::Widget(id)));
-    }
     
     // Auxiliary Grid Methods
     pub fn add_node_perimeter(
@@ -119,9 +100,7 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>
         pos: GridIndex,
         row_n: isize,
         column_n: isize,
-        tool: T,
-        ctx: &mut EventCtx, 
-        id: WidgetId
+        tool: T
     ) {
         let mut map: HashMap<GridIndex, (T, Option<T>)> = HashMap::new();
         for row in pos.row..pos.row + row_n {
@@ -164,17 +143,17 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>
             self.grid.insert(*pos, *current_item);
         }
         self.save_data.insert_and_play(StackItem::BatchAdd(map));
-        ctx.submit_command(Command::new(TRIGGER_CHANGE, (), Target::Widget(id)));
+        // ctx.submit_command(Command::new(TRIGGER_CHANGE, (), Target::Widget(id)));
 
     }
 
     // Clear Grid methods
-    pub fn clear_all(&mut self, ctx: &mut EventCtx, id: WidgetId){
+    pub fn clear_all(&mut self){
         self.save_data.insert_and_play(StackItem::BatchRemove(self.grid.clone()));
         self.grid.clear();
-        ctx.submit_command(Command::new(TRIGGER_CHANGE, (), Target::Widget(id)));
+        // ctx.submit_command(Command::new(TRIGGER_CHANGE, (), Target::Widget(id)));
     }
-    pub fn clear_except(&mut self, set: HashSet<T>, ctx: &mut EventCtx, id: WidgetId){
+    pub fn clear_except(&mut self, set: HashSet<T>){
         let mut map: HashMap<GridIndex, T> = HashMap::new();
         for item_type in set {
             self.grid.retain(|pos, item|{
@@ -187,9 +166,8 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>
             })
         }
         self.save_data.insert_and_play(StackItem::BatchRemove(map));
-        ctx.submit_command(Command::new(TRIGGER_CHANGE, (), Target::Widget(id)));
     }
-    pub fn clear_only(&mut self, set: HashSet<T>, ctx: &mut EventCtx, id: WidgetId){
+    pub fn clear_only(&mut self, set: HashSet<T>){
         let mut map: HashMap<GridIndex, T> = HashMap::new();
         for item_type in set {
             self.grid.retain(|pos, item|{
@@ -202,7 +180,6 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>
             })
         }
         self.save_data.insert_and_play(StackItem::BatchRemove(map));
-        ctx.submit_command(Command::new(TRIGGER_CHANGE, (), Target::Widget(id)));
     }
 
     // Save stack methods
@@ -266,8 +243,6 @@ pub struct GridCanvas<T: GridItem + PartialEq + Debug> where GridCanvasData<T>: 
     state: GridState,
     // canvas: WidgetPod<GridCanvasData<T>, Canvas<GridCanvasData<T>>>,
     canvas: Canvas<GridCanvasData<T>>,
-    previous_playback_index: usize,
-    pub children_changed: bool,
 }
 
 impl<T: Clone + GridItem + Debug> GridCanvas<T> where GridCanvasData<T>: Data {
@@ -278,8 +253,6 @@ impl<T: Clone + GridItem + Debug> GridCanvas<T> where GridCanvasData<T>: Data {
             state: GridState::Idle,
             // canvas: WidgetPod::new(canvas),
             canvas,
-            previous_playback_index: 0,
-            children_changed: false,
         }
     }
 
@@ -336,7 +309,6 @@ impl<T: Clone + GridItem + Debug> GridCanvas<T> where GridCanvasData<T>: Data {
                 }
                 self.canvas.children.remove(delete_index);
                 self.canvas.children.insert(delete_index, child); 
-                // self.children.remove(index);
             }
         }
     }
@@ -363,17 +335,6 @@ impl<T: Clone + GridItem + Debug> GridCanvas<T> where GridCanvasData<T>: Data {
                 },
                 _ => (),
             }
-        }
-    }
-
-    // For index based layout containers the position will be replaced by an index
-    // Can be useful for drag and drop operations within the same container
-    pub fn exchange_child(&mut self, from: PointKey, to: PointKey){
-        let index_from = self.canvas.position_map.remove(&from);
-        let index_to = self.canvas.position_map.remove(&to);
-        if let (Some(index_from), Some(index_to)) = (index_from, index_to) {
-            self.canvas.position_map.insert(to, index_from);
-            self.canvas.position_map.insert(from, index_to);
         }
     }
 }
@@ -503,32 +464,6 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
                 }
             },
         }
-
-        let is_forward =  (data.save_data.playback_index as isize - self.previous_playback_index as isize) >= 0;
-        if is_forward {
-            for index in self.previous_playback_index..data.save_data.playback_index {
-                if let Some(item) = data.save_data.tape.get(index) {
-                    item.forward_canvas(self, data);
-                    ctx.children_changed();
-                    // item.forward_canvas(self.canvas.widget_mut(), data);
-                    // self.children_changed = true;
-                    ctx.request_paint();
-                }
-            }
-        } else {
-            for index in (data.save_data.playback_index..self.previous_playback_index).rev() {
-                if let Some(item) = data.save_data.tape.get(index) {
-                    item.reverse_canvas(self, data);
-                    ctx.children_changed();
-                    // item.reverse_canvas(self.canvas.widget_mut(), data);
-                    // self.children_changed = true;
-                    ctx.request_paint();
-                }
-            }
-        }        
-
-        self.previous_playback_index = data.save_data.playback_index;
-
         self.canvas.event(ctx, event, data, env);
     }
 
@@ -536,7 +471,6 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
         // println!("Canvas Wrapper ({:?}) Lifecycle: {:?}", ctx.widget_id(), event);
         // TODO: Handle ViewContext Changed
         if let LifeCycle::WidgetAdded = event {
-            println!("GridCanvas received WidgetAdded");
             ctx.children_changed();
         }
 
@@ -548,15 +482,31 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
         // println!("=====================================");
         // println!("Old Grid | {:?} vs {:?} | New Grid", old_data.grid.len(), data.grid.len());
         // println!("Old Save | {:?} vs {:?} | New Save", old_data.save_data.save_stack.len(), data.save_data.save_stack.len());
-        // println!("Old Play | {:?} vs {:?} | New Play", old_data.save_data.playback_index, data.save_data.playback_index);
+        println!("Old Play | {:?} vs {:?} | New Play", old_data.save_data.playback_index, data.save_data.playback_index);
         // println!("Canvas Children: {:?}\n", self.canvas.children_len());
         
         self.canvas.update(ctx, old_data, data, env);
         // self.canvas.update(ctx, data, env);
 
-        if self.children_changed {
-            ctx.children_changed();
-            self.children_changed = false
+        let is_forward =  (data.save_data.playback_index as isize - old_data.save_data.playback_index as isize) >= 0;
+        if is_forward {
+            for index in old_data.save_data.playback_index..data.save_data.playback_index {
+                if let Some(item) = data.save_data.tape.get(index) {
+                    item.forward_canvas(self, data);
+                    ctx.children_changed();
+                    // item.forward_canvas(self.canvas.widget_mut(), data);
+                    ctx.request_paint();
+                }
+            }
+        } else {
+            for index in (data.save_data.playback_index..old_data.save_data.playback_index).rev() {
+                if let Some(item) = data.save_data.tape.get(index) {
+                    item.reverse_canvas(self, data);
+                    ctx.children_changed();
+                    // item.reverse_canvas(self.canvas.widget_mut(), data);
+                    ctx.request_paint();
+                }
+            }
         }
 
         if old_data.snap_data.pan_data.offset != data.snap_data.pan_data.offset || old_data.snap_data.zoom_data.zoom_scale != data.snap_data.zoom_data.zoom_scale {
@@ -669,7 +619,7 @@ impl<T:Data> Widget<T> for GridChild<T> {
         ctx.fill(rect, &self.color);
 
         let label_offset = (size.to_vec2() - self.label_size.to_vec2()) / 2.0;
-        println!("Label Paint");
+
         ctx.with_save(|ctx| {
             ctx.transform(Affine::translate(label_offset));
             self.label_text.paint(ctx, data, env);

@@ -174,11 +174,11 @@ fn main() {
     };
 
     let mut pattern = Vector::new();
-    // pattern.push_back(StackItem::Add(GridIndex{row:0, col:0}, GridNodeType::Wall, None));
-    // pattern.push_back(StackItem::Add(GridIndex{row:0, col:1}, GridNodeType::Wall, None));
-    // pattern.push_back(StackItem::Add(GridIndex{row:0, col:2}, GridNodeType::Wall, None));
-    // pattern.push_back(StackItem::Add(GridIndex{row:1, col:0}, GridNodeType::Wall, None));
-    // pattern.push_back(StackItem::Add(GridIndex{row:2, col:0}, GridNodeType::Wall, None));
+    pattern.push_back(StackItem::Add(GridIndex{row:0, col:0}, GridNodeType::Wall, None));
+    pattern.push_back(StackItem::Add(GridIndex{row:0, col:1}, GridNodeType::Wall, None));
+    pattern.push_back(StackItem::Add(GridIndex{row:0, col:2}, GridNodeType::Wall, None));
+    pattern.push_back(StackItem::Add(GridIndex{row:1, col:0}, GridNodeType::Wall, None));
+    pattern.push_back(StackItem::Add(GridIndex{row:2, col:0}, GridNodeType::Wall, None));
     
     let mut map: HashMap<GridIndex, (GridNodeType<Net>, Option<GridNodeType<Net>>)> = HashMap::new();
 
@@ -218,7 +218,7 @@ fn main() {
 
     
     // data.grid_data.submit_to_stack_and_process(pattern);
-    data.grid_data.submit_to_stack(pattern);
+    // data.grid_data.submit_to_stack(pattern);
 
     AppLauncher::with_window(main_window)
         .configure_env(|env, _| {
@@ -271,16 +271,18 @@ fn make_grid_options() -> impl Widget<AppData>{
             Flex::row()
                 .with_child(Label::new("Playback: "))
                 .with_child(Button::new("Previous").lens(AppData::grid_data).on_click(|ctx, data, _env|{
-                    data.grid_data.undo(ctx, GRID_ID);
+                    data.grid_data.save_data.undo();
+                    ctx.request_update();
                 }))
                 .with_child(Button::new("Next").lens(AppData::grid_data).on_click(|ctx, data, _env|{
-                    data.grid_data.redo(ctx, GRID_ID);
+                    data.grid_data.save_data.redo();
+                    ctx.request_update();
                 }))
                 .with_child(Button::new("Clear").lens(AppData::grid_data).on_click(|ctx, data, _env|{
-                    data.grid_data.clear_all(ctx, GRID_ID);
+                    data.grid_data.clear_all();
                 }))
                 .with_child(Button::new("Add perimeter").lens(AppData::grid_data).on_click(|ctx, data, _env|{
-                    data.grid_data.add_node_perimeter(GridIndex { row: 5, col: 5 }, 5, 5, GridNodeType::Boundary, ctx, GRID_ID);
+                    data.grid_data.add_node_perimeter(GridIndex { row: 5, col: 5 }, 5, 5, GridNodeType::Boundary);
                 }))
                 .with_child(Button::new("Add pattern 1").lens(AppData::grid_data).on_click(|ctx, data, _env|{
                     let mut pattern = Vector::new();
