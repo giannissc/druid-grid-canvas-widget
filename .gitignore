@@ -14,3 +14,8 @@ Cargo.lock
 
 /target
 /Cargo.lock
+
+# Other
+*.pdf
+settings.json
+*.code-workspace
