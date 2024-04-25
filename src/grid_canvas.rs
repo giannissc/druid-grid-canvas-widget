@@ -519,6 +519,16 @@ where
         // println!("Canvas Wrapper ({:?}) Lifecycle: {:?}", ctx.widget_id(), event);
         // TODO: Handle ViewContext Changed
         if let LifeCycle::WidgetAdded = event {
+            for (grid_index, item) in data.grid.iter() {
+                let from = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
+                let size = Size::new(data.snap_data.cell_size, data.snap_data.cell_size);
+                let child = GridChild::new(
+                    item.get_short_text(),
+                    item.get_color(),
+                    size,
+                );
+                self.add_child(child, from.into())
+            }
             ctx.children_changed();
         }
 
@@ -535,6 +545,8 @@ where
         self.canvas.update(ctx, old_data, data, env);
         // self.canvas.update(ctx, data, env);
         let diff = data.grid.clone().difference(old_data.grid.clone());
+        // println!("{:?}", diff);
+
         for (grid_index, item) in diff {
             let from = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
             if self.canvas.position_map.contains_key(&from.into()) {
