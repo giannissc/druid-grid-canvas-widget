@@ -1,20 +1,20 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-/// 
+///
 /// Imports
-/// 
+///
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 use druid::kurbo::Circle;
-use druid::widget::{Painter,};
-use druid::{ Point, theme, RenderContext, Size, Rect, Data, Lens,};
-use druid_color_thesaurus::{gray};
+use druid::widget::Painter;
+use druid::{theme, Data, Lens, Point, Rect, RenderContext, Size};
+use druid_color_thesaurus::gray;
 
-use crate::panning::{PanData, PanDataAccess, };
-use crate::zooming::{ZoomData, ZoomDataAccess,};
+use crate::panning::{PanData, PanDataAccess};
+use crate::zooming::{ZoomData, ZoomDataAccess};
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-/// 
+///
 /// GridSnapData
-/// 
+///
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 pub trait GridSnapDataAccess: PanDataAccess + ZoomDataAccess {
     fn get_cell_size(&self) -> f64;
@@ -34,7 +34,7 @@ pub struct GridSnapData {
 
 impl GridSnapData {
     pub fn new(cell_size: f64) -> Self {
-        Self{
+        Self {
             cell_size,
             grid_visibility: true,
             zoom_data: ZoomData::new(),
@@ -48,7 +48,7 @@ impl GridSnapData {
 
     pub fn get_grid_index(&self, position: Point) -> (isize, isize) {
         // Normalise translation offset
-        let mut position_norm = position; 
+        let mut position_norm = position;
         position_norm.x -= self.pan_data.offset.x;
         position_norm.y -= self.pan_data.offset.y;
 
@@ -60,19 +60,19 @@ impl GridSnapData {
         (row, col)
     }
 
-    pub fn get_opt_grid_position(&self, row: isize, col:isize) -> Point {
+    pub fn get_opt_grid_position(&self, row: isize, col: isize) -> Point {
         let scaled_cell_size = self.cell_size * self.zoom_data.zoom_scale;
 
-        Point { 
-            x: col as f64 * scaled_cell_size + self.pan_data.offset.x, 
-            y: row as f64 * scaled_cell_size + self.pan_data.offset.y, 
+        Point {
+            x: col as f64 * scaled_cell_size + self.pan_data.offset.x,
+            y: row as f64 * scaled_cell_size + self.pan_data.offset.y,
         }
     }
 
-    pub fn get_grid_position(&self, row: isize, col:isize) -> Point {
+    pub fn get_grid_position(&self, row: isize, col: isize) -> Point {
         Point {
             x: col as f64 * self.cell_size,
-            y: row as f64 * self.cell_size
+            y: row as f64 * self.cell_size,
         }
     }
 }
@@ -120,20 +120,20 @@ impl PanDataAccess for GridSnapData {
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-/// 
+///
 /// GridSnapPainter
-/// 
+///
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 #[derive(Copy, Clone)]
-pub struct GridSnapPainter{
+pub struct GridSnapPainter {
     show_origin: bool,
     debug_offset: bool,
 }
 
 impl Default for GridSnapPainter {
     fn default() -> Self {
-        Self { 
-            show_origin: true, 
+        Self {
+            show_origin: true,
             debug_offset: true,
         }
     }
@@ -148,10 +148,10 @@ impl GridSnapPainter {
             // let scaled_cell_size = data.cell_size * data.zoom_data.zoom_scale;
             let scaled_cell_size = data.get_cell_size() * data.get_zoom_scale();
             let line_width = scaled_cell_size * 0.05;
-            
+
             // Partial Paint Setup
             let screen_space = ctx.size();
-            let damage_region  = ctx.region();
+            let damage_region = ctx.region();
             let invalidation_rect = damage_region.bounding_box();
 
             // Background Painting Logic
@@ -160,21 +160,21 @@ impl GridSnapPainter {
 
             // Axes Painting Logic
             if data.get_grid_visibility() {
-
                 let start_point = data.move_to_grid_position(invalidation_rect.origin());
                 let end_point = data.move_to_grid_position(Point {
                     x: invalidation_rect.max_x(),
                     y: invalidation_rect.max_y(),
                 });
-                
+
                 let from_row = (start_point.y / scaled_cell_size).floor() as usize;
-                let from_col = (start_point.x /scaled_cell_size).floor() as usize;
+                let from_col = (start_point.x / scaled_cell_size).floor() as usize;
 
                 let to_row = (end_point.y / scaled_cell_size).ceil() as usize + 1;
                 let to_col = (end_point.x / scaled_cell_size).ceil() as usize + 1;
 
-                for row in from_row..= to_row {
-                    let mut from_point = Point::new(0.0, scaled_cell_size * row as f64 - line_width / 2.0 );
+                for row in from_row..=to_row {
+                    let mut from_point =
+                        Point::new(0.0, scaled_cell_size * row as f64 - line_width / 2.0);
                     // Integrate translation data to line rendering
                     // from_point.y += data.pan_data.absolute_offset.y % scaled_cell_size;
                     from_point.y += data.get_offset().y % scaled_cell_size;
@@ -184,7 +184,8 @@ impl GridSnapPainter {
                 }
 
                 for col in from_col..=to_col {
-                    let mut from_point = Point::new(scaled_cell_size * col as f64 - line_width / 2.0, 0.0);
+                    let mut from_point =
+                        Point::new(scaled_cell_size * col as f64 - line_width / 2.0, 0.0);
                     // Integrate translation data to line rendering
                     // from_point.x += data.pan_data.absolute_offset.x % scaled_cell_size;
                     from_point.x += data.get_offset().x % scaled_cell_size;
@@ -203,10 +204,12 @@ impl GridSnapPainter {
 
             if debug_visibility {
                 // let center = Point::new(data.pan_data.absolute_offset.x % scaled_cell_size,data.pan_data.absolute_offset.y % scaled_cell_size);
-                let center = Point::new(data.get_offset().x % scaled_cell_size,data.get_offset().y % scaled_cell_size);
+                let center = Point::new(
+                    data.get_offset().x % scaled_cell_size,
+                    data.get_offset().y % scaled_cell_size,
+                );
                 let circle = Circle::new(center, 5.0);
                 ctx.fill(circle, &druid_color_thesaurus::pink::CORAL_PINK);
-
             }
         })
     }
@@ -218,10 +221,10 @@ impl GridSnapPainter {
         Painter::new(move |ctx, data: &GridSnapData, env| {
             let scaled_cell_size = data.cell_size * data.zoom_data.zoom_scale;
             let line_width = scaled_cell_size * 0.05;
-            
+
             // Partial Paint Setup
             let screen_space = ctx.size();
-            let damage_region  = ctx.region();
+            let damage_region = ctx.region();
             let invalidation_rect = damage_region.bounding_box();
 
             // Background Painting Logic
@@ -234,18 +237,18 @@ impl GridSnapPainter {
                     x: invalidation_rect.max_x(),
                     y: invalidation_rect.max_y(),
                 });
-                
+
                 let from_row = (start_point.y / scaled_cell_size).floor() as usize;
-                let from_col = (start_point.x /scaled_cell_size).floor() as usize;
+                let from_col = (start_point.x / scaled_cell_size).floor() as usize;
 
                 let to_row = (end_point.y / scaled_cell_size).ceil() as usize + 1;
                 let to_col = (end_point.x / scaled_cell_size).ceil() as usize + 1;
 
-                for row in from_row..= to_row {
+                for row in from_row..=to_row {
                     for col in from_col..=to_col {
                         let mut center = Point::new(
-                            scaled_cell_size * col as f64, 
-                            scaled_cell_size * row as f64, 
+                            scaled_cell_size * col as f64,
+                            scaled_cell_size * row as f64,
                         );
 
                         // Zoom UI functionality
@@ -265,12 +268,13 @@ impl GridSnapPainter {
             }
 
             if debug_visibility {
-                let center = Point::new(data.pan_data.offset.x % scaled_cell_size,data.pan_data.offset.y % scaled_cell_size);
+                let center = Point::new(
+                    data.pan_data.offset.x % scaled_cell_size,
+                    data.pan_data.offset.y % scaled_cell_size,
+                );
                 let circle = Circle::new(center, 5.0);
                 ctx.fill(circle, &druid_color_thesaurus::pink::CORAL_PINK);
-
             }
         })
     }
-
 }

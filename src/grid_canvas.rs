@@ -1,21 +1,26 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-/// 
+use druid::{
+    im::{HashMap, HashSet, Vector},
+    widget::{Label, LabelText},
+    Affine, BoxConstraints, Color, Data, Env, Event, EventCtx, Insets, LayoutCtx, Lens, LifeCycle,
+    LifeCycleCtx, MouseButton, PaintCtx, Point, Rect, RenderContext, Selector, Size, TextAlignment,
+    UpdateCtx, Widget, WidgetPod,
+};
+use druid_color_thesaurus::white;
+///
 /// Imports
-/// 
+///
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 use std::fmt::Debug;
-use druid::{im::{HashMap, HashSet, Vector}, Data, Rect, Point, Size, Widget, EventCtx, Event, Env, 
-Selector, MouseButton, LifeCycleCtx, LifeCycle, UpdateCtx, LayoutCtx, BoxConstraints, PaintCtx, 
-Affine, RenderContext, Lens, widget::{Label, LabelText}, Insets, Color, TextAlignment, WidgetPod,};
-use druid_color_thesaurus::white;
 
-use crate::{canvas::{Canvas, Child, PointKey}, cassette::Cassette, snapping::GridSnapData, GridAction, GridIndex, GridItem, GridState, StackItem};
-
+use crate::{
+    canvas::{Canvas, Child, PointKey}, snapping::GridSnapData, utils::cassetta::{Cassetta, TapeItem}, GridAction, GridIndex, GridItem, GridState,
+};
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
-/// 
+///
 /// Command Selectors
-/// 
+///
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 pub const SET_DISABLED: Selector = Selector::new("disabled-grid-state");
 pub const SET_ENABLED: Selector = Selector::new("idle-grid-state");
@@ -26,22 +31,25 @@ pub const SET_ENABLED: Selector = Selector::new("idle-grid-state");
 //
 //////////////////////////////////////////////////////////////////////////////////////
 #[derive(Clone, Data, Lens, PartialEq, Debug)]
-pub struct GridCanvasData<T: GridItem + PartialEq + Debug>{
+pub struct GridCanvasData<T: GridItem + PartialEq + Debug> {
     action: GridAction,
     pub grid_item: T,
     pub grid: HashMap<GridIndex, T>,
     // Data Hierarchy
-    pub save_data: Cassette<StackItem<T>>,
+    pub save_data: Cassetta<TapeItem<GridIndex, T>>,
     pub snap_data: GridSnapData,
 }
 
-impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>: Data{
+impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>
+where
+    GridCanvasData<T>: Data,
+{
     pub fn new(item_type: T) -> Self {
         Self {
             action: GridAction::Dynamic,
             grid_item: item_type,
             grid: HashMap::new(),
-            save_data: Cassette::new(),
+            save_data: Cassetta::new(),
             snap_data: GridSnapData::new(15.0),
         }
     }
@@ -51,17 +59,17 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>
     }
 
     // Basic Grid methods
-    fn add_node(&mut self, pos: &GridIndex, item: T) -> bool{
+    fn add_node(&mut self, pos: &GridIndex, item: T) -> bool {
         let option = self.grid.get(pos);
 
         let command_item;
         if option.is_none() {
-            command_item = StackItem::Add(*pos, item, None);
+            command_item = TapeItem::Add(*pos, item, None);
         } else {
-            command_item = StackItem::Add(*pos, item, Some(*option.unwrap()));
+            command_item = TapeItem::Add(*pos, item, Some(*option.unwrap()));
         }
-        
-        if item.can_add(option){
+
+        if item.can_add(option) {
             self.grid.insert(*pos, item);
             self.save_data.insert_and_play(command_item);
             return true;
@@ -70,9 +78,9 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>
     }
 
     fn remove_node(&mut self, pos: &GridIndex) -> bool {
-        if let Some(item) = self.grid.remove(pos){
-            if item.can_remove(){
-                let command_item = StackItem::Remove(*pos, item);
+        if let Some(item) = self.grid.remove(pos) {
+            if item.can_remove() {
+                let command_item = TapeItem::Remove(*pos, item);
                 self.save_data.insert_and_play(command_item);
                 return true;
             } else {
@@ -81,27 +89,21 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>
         }
         false
     }
-    fn move_node(&mut self, from: &GridIndex, to:&GridIndex) -> bool{
+    fn move_node(&mut self, from: &GridIndex, to: &GridIndex) -> bool {
         let item = self.grid.get(from).unwrap();
         let other = self.grid.get(to);
         if item.can_move(other) {
             let item = self.grid.remove(from).unwrap();
             self.grid.insert(*to, item);
-            let command_item = StackItem::Move(*from, *to, item);
+            let command_item = TapeItem::Move(*from, *to, item);
             self.save_data.insert_and_play(command_item);
             return true;
         }
         false
     }
-    
+
     // Auxiliary Grid Methods
-    pub fn add_node_perimeter(
-        &mut self,
-        pos: GridIndex,
-        row_n: isize,
-        column_n: isize,
-        tool: T
-    ) {
+    pub fn add_node_perimeter(&mut self, pos: GridIndex, row_n: isize, column_n: isize, tool: T) {
         let mut map: HashMap<GridIndex, (T, Option<T>)> = HashMap::new();
         for row in pos.row..pos.row + row_n {
             //debug!("Add node perimeter");
@@ -139,24 +141,24 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>
             }
         }
 
-        for (pos, (current_item, _)) in &map{
+        for (pos, (current_item, _)) in &map {
             self.grid.insert(*pos, *current_item);
         }
-        self.save_data.insert_and_play(StackItem::BatchAdd(map));
+        self.save_data.insert_and_play(TapeItem::BatchAdd(map));
         // ctx.submit_command(Command::new(TRIGGER_CHANGE, (), Target::Widget(id)));
-
     }
 
     // Clear Grid methods
-    pub fn clear_all(&mut self){
-        self.save_data.insert_and_play(StackItem::BatchRemove(self.grid.clone()));
+    pub fn clear_all(&mut self) {
+        self.save_data
+            .insert_and_play(TapeItem::BatchRemove(self.grid.clone()));
         self.grid.clear();
         // ctx.submit_command(Command::new(TRIGGER_CHANGE, (), Target::Widget(id)));
     }
-    pub fn clear_except(&mut self, set: HashSet<T>){
+    pub fn clear_except(&mut self, set: HashSet<T>) {
         let mut map: HashMap<GridIndex, T> = HashMap::new();
         for item_type in set {
-            self.grid.retain(|pos, item|{
+            self.grid.retain(|pos, item| {
                 if *item == item_type {
                     true
                 } else {
@@ -165,12 +167,12 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>
                 }
             })
         }
-        self.save_data.insert_and_play(StackItem::BatchRemove(map));
+        self.save_data.insert_and_play(TapeItem::BatchRemove(map));
     }
-    pub fn clear_only(&mut self, set: HashSet<T>){
+    pub fn clear_only(&mut self, set: HashSet<T>) {
         let mut map: HashMap<GridIndex, T> = HashMap::new();
         for item_type in set {
-            self.grid.retain(|pos, item|{
+            self.grid.retain(|pos, item| {
                 if *item == item_type {
                     map.insert(*pos, *item);
                     false
@@ -179,25 +181,28 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>
                 }
             })
         }
-        self.save_data.insert_and_play(StackItem::BatchRemove(map));
+        self.save_data.insert_and_play(TapeItem::BatchRemove(map));
     }
 
     // Save stack methods
-    fn validate_stack_list(&mut self, list: Vector<StackItem<T>>) -> (HashMap<GridIndex, T>, Vector<StackItem<T>>){
+    fn validate_stack_list(
+        &mut self,
+        list: Vector<TapeItem<GridIndex, T>>,
+    ) -> (HashMap<GridIndex, T>, Vector<TapeItem<GridIndex, T>>) {
         let mut stack_list = Vector::new();
         let mut pos_map = HashMap::new();
-        
+
         for stack_item in list {
             match stack_item {
-                StackItem::Add(pos, current_item, _) => {
+                TapeItem::Add(pos, current_item, _) => {
                     let option = self.grid.get(&pos);
                     if current_item.can_add(option) {
                         stack_list.push_back(stack_item);
                         pos_map.insert(pos, current_item);
                     }
-                },
-                StackItem::BatchAdd(mut map) => {
-                    map.retain(|pos, (current_item, _)|{
+                }
+                TapeItem::BatchAdd(mut map) => {
+                    map.retain(|pos, (current_item, _)| {
                         let option = self.grid.get(pos);
                         if current_item.can_add(option) {
                             pos_map.insert(*pos, *current_item);
@@ -205,25 +210,24 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>
                         current_item.can_add(option)
                     });
 
-                    if !map.is_empty(){
-                        stack_list.push_back(StackItem::BatchAdd(map));
+                    if !map.is_empty() {
+                        stack_list.push_back(TapeItem::BatchAdd(map));
                     }
-                },
+                }
                 _ => (),
             }
         }
         (pos_map, stack_list)
     }
 
-    pub fn submit_to_stack(&mut self, list: Vector<StackItem<T>>){
+    pub fn submit_to_stack(&mut self, list: Vector<TapeItem<GridIndex, T>>) {
         let (_, save_list) = self.validate_stack_list(list);
         self.save_data.append(save_list);
-
     }
 
-    pub fn submit_to_stack_and_process(&mut self, list: Vector<StackItem<T>>){
+    pub fn submit_to_stack_and_process(&mut self, list: Vector<TapeItem<GridIndex, T>>) {
         let (pos_map, save_list) = self.validate_stack_list(list);
-        for (pos, item) in pos_map.iter(){
+        for (pos, item) in pos_map.iter() {
             self.grid.insert(*pos, *item);
         }
         self.save_data.append_and_play(save_list);
@@ -231,21 +235,27 @@ impl<T: GridItem + PartialEq + Debug> GridCanvasData<T>  where GridCanvasData<T>
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
-/// 
+///
 /// GridCanvas Widget
-/// 
+///
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 // TODO: Keep as widget to perform scaling/translation of child children paint methods
 // TODO: Move Snapping System out of main to lib and attach to Canvas
 // TODO: Add canvas to grid widget
-pub struct GridCanvas<T: GridItem + PartialEq + Debug> where GridCanvasData<T>: Data {
+pub struct GridCanvas<T: GridItem + PartialEq + Debug>
+where
+    GridCanvasData<T>: Data,
+{
     start_pos: GridIndex,
     state: GridState,
     // canvas: WidgetPod<GridCanvasData<T>, Canvas<GridCanvasData<T>>>,
     canvas: Canvas<GridCanvasData<T>>,
 }
 
-impl<T: Clone + GridItem + Debug> GridCanvas<T> where GridCanvasData<T>: Data {
+impl<T: Clone + GridItem + Debug> GridCanvas<T>
+where
+    GridCanvasData<T>: Data,
+{
     pub fn new() -> Self {
         let canvas = Canvas::new();
         GridCanvas {
@@ -261,66 +271,79 @@ impl<T: Clone + GridItem + Debug> GridCanvas<T> where GridCanvasData<T>: Data {
             x: cell_size * pos.col as f64,
             y: cell_size * pos.row as f64,
         };
-        Rect::from_origin_size(point, Size {width: cell_size, height: cell_size })
+        Rect::from_origin_size(
+            point,
+            Size {
+                width: cell_size,
+                height: cell_size,
+            },
+        )
     }
 
     // For index based layout containers the position will be replaced by an index
-    // Might need two variants for this: add and add_relocate in case you don't want 
+    // Might need two variants for this: add and add_relocate in case you don't want
     // to remove the the exist at the to position. Useful for drag and drop between
     // different containers
     // A third method
     pub fn add_child(&mut self, child: impl Widget<GridCanvasData<T>> + 'static, from: PointKey) {
         let delete_index = self.canvas.position_map.remove(&from);
-        
+
         if let Some(delete_index) = delete_index {
             let last_index = self.canvas.children.len() - 1;
             let child = self.canvas.children.remove(last_index);
             if last_index != delete_index {
                 // Update position map
-                if let Child::Explicit {position, ..} = &child {
+                if let Child::Explicit { position, .. } = &child {
                     let key: PointKey = <Point as Into<PointKey>>::into(*position);
                     self.canvas.position_map.remove(&key);
                     self.canvas.position_map.insert(key, delete_index);
                 }
                 self.canvas.children.remove(delete_index);
-                self.canvas.children.insert(delete_index, child); 
+                self.canvas.children.insert(delete_index, child);
             }
         }
 
-        let inner: WidgetPod<GridCanvasData<T>, Box<dyn Widget<GridCanvasData<T>>>> = WidgetPod::new(Box::new(child));
+        let inner: WidgetPod<GridCanvasData<T>, Box<dyn Widget<GridCanvasData<T>>>> =
+            WidgetPod::new(Box::new(child));
         let index = self.canvas.children.len();
-        self.canvas.children.insert(index, Child::Explicit { inner, position: from.clone().into()});
+        self.canvas.children.insert(
+            index,
+            Child::Explicit {
+                inner,
+                position: from.clone().into(),
+            },
+        );
         self.canvas.position_map.insert(from, index);
     }
 
     // For index based layout containers the position will be replaced by an index
-    pub fn remove_child(&mut self, from: PointKey){
-        // Swap item at index with last item and then delete 
+    pub fn remove_child(&mut self, from: PointKey) {
+        // Swap item at index with last item and then delete
         let delete_index = self.canvas.position_map.remove(&from);
         let last_index = self.canvas.children.len() - 1;
         if let Some(delete_index) = delete_index {
             let child = self.canvas.children.remove(last_index);
             if last_index != delete_index {
                 // Update position map
-                if let Child::Explicit {position, ..} = &child {
+                if let Child::Explicit { position, .. } = &child {
                     let key: PointKey = <Point as Into<PointKey>>::into(*position);
                     self.canvas.position_map.remove(&key);
                     self.canvas.position_map.insert(key, delete_index);
                 }
                 self.canvas.children.remove(delete_index);
-                self.canvas.children.insert(delete_index, child); 
+                self.canvas.children.insert(delete_index, child);
             }
         }
     }
 
     // For index based layout containers the position will be replaced by an index
-    // Might need two variants for this: move and move_relocate in case you don't want 
-    // to remove the the exist at the to position. Useful for drag and drop within the 
+    // Might need two variants for this: move and move_relocate in case you don't want
+    // to remove the the exist at the to position. Useful for drag and drop within the
     // same container
-    pub fn move_child(&mut self, from: PointKey, to: PointKey){
+    pub fn move_child(&mut self, from: PointKey, to: PointKey) {
         let index_from = self.canvas.position_map.remove(&from);
         let index_to = self.canvas.position_map.remove(&to);
-        
+
         if let Some(index) = index_to {
             self.canvas.children.remove(index);
         }
@@ -328,21 +351,36 @@ impl<T: Clone + GridItem + Debug> GridCanvas<T> where GridCanvasData<T>: Data {
         if let Some(old_index) = index_from {
             let inner = self.canvas.children.remove(old_index);
             match inner {
-                Child::Explicit { inner, ..} => {
+                Child::Explicit { inner, .. } => {
                     let index = self.canvas.children.len();
-                    self.canvas.children.insert(index, Child::Explicit { inner, position: to.clone().into()});
+                    self.canvas.children.insert(
+                        index,
+                        Child::Explicit {
+                            inner,
+                            position: to.clone().into(),
+                        },
+                    );
                     self.canvas.position_map.insert(from, index);
-                },
+                }
                 _ => (),
             }
         }
     }
 }
 
-impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T> where GridCanvasData<T>: Data {
-    fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut GridCanvasData<T>, env: &Env) {
+impl<T: GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
+where
+    GridCanvasData<T>: Data,
+{
+    fn event(
+        &mut self,
+        ctx: &mut EventCtx,
+        event: &Event,
+        data: &mut GridCanvasData<T>,
+        env: &Env,
+    ) {
         // println!("Canvas Wrapper Event");
-        match &self.state{
+        match &self.state {
             GridState::Idle => {
                 // info!("Idle State");
                 match event {
@@ -350,44 +388,43 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
                         if cmd.is(SET_DISABLED) {
                             self.state = GridState::Disabled;
                         }
-                    },
+                    }
                     Event::MouseDown(e) => {
                         let (row, col) = data.snap_data.get_grid_index(e.pos);
                         let grid_index = GridIndex::new(row, col);
                         let option = data.grid.get(&grid_index);
 
-                        if self.state == GridState::Idle{
-                            if e.button == MouseButton::Left{
+                        if self.state == GridState::Idle {
+                            if e.button == MouseButton::Left {
                                 // info!("Left Click");
                                 // info!("Start State: {:?}", self.state);
                                 // info!("Start Action: {:?}", data.action);
                                 match data.action {
                                     GridAction::Dynamic => {
                                         self.state = GridState::Running(GridAction::Dynamic);
-                                        match option{
+                                        match option {
                                             None => {
                                                 data.action = GridAction::Add;
-                                            },
-                                            Some(item)=> {
+                                            }
+                                            Some(item) => {
                                                 if *item == data.grid_item {
                                                     data.action = GridAction::Move
                                                 } else {
-                                                    data.action = GridAction::Add                            
+                                                    data.action = GridAction::Add
                                                 }
                                             }
                                         }
-                                    },
+                                    }
                                     GridAction::Move => {
                                         if option.is_some() {
                                             self.state = GridState::Running(GridAction::Move);
                                         }
-                                    },
+                                    }
                                     _ => {
                                         self.state = GridState::Running(data.action);
-                                    },                                        
+                                    }
                                 }
-
-                            } else if e.button == MouseButton::Right{
+                            } else if e.button == MouseButton::Right {
                                 // info!("Right Click");
                                 if let GridAction::Dynamic = data.action {
                                     self.state = GridState::Running(data.action);
@@ -396,10 +433,10 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
                             }
                         }
 
-                        if let GridState::Running(_) = self.state{
+                        if let GridState::Running(_) = self.state {
                             if data.action == GridAction::Add {
                                 data.add_node(&grid_index, data.grid_item);
-                            } else if data.action == GridAction::Remove && option.is_some(){
+                            } else if data.action == GridAction::Remove && option.is_some() {
                                 data.remove_node(&grid_index);
                             } else if data.action == GridAction::Move && option.is_some() {
                                 self.start_pos = grid_index;
@@ -407,44 +444,49 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
                         }
                         // info!("Acquire State: {:?}", self.state);
                         // info!("Acquire Action: {:?}", data.action);
-                    },
+                    }
 
-                    _ => {},
+                    _ => {}
                 }
-            },
+            }
             GridState::Running(_) => {
                 // info!("Running State");
-                match event {            
+                match event {
                     Event::MouseMove(e) => {
                         let (row, col) = data.snap_data.get_grid_index(e.pos);
                         let grid_index = GridIndex::new(row, col);
                         let option = data.grid.get(&grid_index);
 
-                        match data.action{
+                        match data.action {
                             GridAction::Add => {
                                 data.add_node(&grid_index, data.grid_item);
-                            },
+                            }
                             GridAction::Move => {
                                 if self.start_pos != grid_index {
                                     if data.move_node(&self.start_pos, &grid_index) {
                                         self.start_pos = grid_index;
                                     }
                                 }
-                            },
+                            }
                             GridAction::Remove => {
-                                if option.is_some(){
+                                if option.is_some() {
                                     data.remove_node(&grid_index);
-                                }        
-                            },
+                                }
+                            }
                             _ => (),
                         }
-                    },
-        
+                    }
+
                     Event::MouseUp(e) => {
-                        if e.button == MouseButton::Right && self.state == GridState::Running(GridAction::Dynamic) && data.action == GridAction::Remove {
+                        if e.button == MouseButton::Right
+                            && self.state == GridState::Running(GridAction::Dynamic)
+                            && data.action == GridAction::Remove
+                        {
                             self.state = GridState::Idle;
                             data.action = GridAction::Dynamic;
-                        } else if e.button == MouseButton::Left && self.state == GridState::Running(GridAction::Dynamic){
+                        } else if e.button == MouseButton::Left
+                            && self.state == GridState::Running(GridAction::Dynamic)
+                        {
                             self.state = GridState::Idle;
                             data.action = GridAction::Dynamic;
                         } else if e.button == MouseButton::Left {
@@ -452,22 +494,28 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
                         }
                         // info!("Release State: {:?}", self.state);
                         // info!("Release Action: {:?}", data.action);
-                    },
-                    _ => {},
+                    }
+                    _ => {}
                 }
-            },
+            }
             GridState::Disabled => {
                 if let Event::Command(cmd) = event {
                     if cmd.is(SET_ENABLED) {
                         self.state = GridState::Idle;
                     }
                 }
-            },
+            }
         }
         self.canvas.event(ctx, event, data, env);
     }
 
-    fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, data: &GridCanvasData<T>, env: &Env) {
+    fn lifecycle(
+        &mut self,
+        ctx: &mut LifeCycleCtx,
+        event: &LifeCycle,
+        data: &GridCanvasData<T>,
+        env: &Env,
+    ) {
         // println!("Canvas Wrapper ({:?}) Lifecycle: {:?}", ctx.widget_id(), event);
         // TODO: Handle ViewContext Changed
         if let LifeCycle::WidgetAdded = event {
@@ -477,51 +525,54 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
         self.canvas.lifecycle(ctx, event, data, env);
     }
 
-    fn update(&mut self, ctx: &mut UpdateCtx, old_data: &GridCanvasData<T>, data: &GridCanvasData<T>, env: &Env){
-        // println!("Canvas Wrapper Update");
-        // println!("=====================================");
-        // println!("Old Grid | {:?} vs {:?} | New Grid", old_data.grid.len(), data.grid.len());
-        // println!("Old Save | {:?} vs {:?} | New Save", old_data.save_data.save_stack.len(), data.save_data.save_stack.len());
-        println!("Old Play | {:?} vs {:?} | New Play", old_data.save_data.playback_index, data.save_data.playback_index);
-        // println!("Canvas Children: {:?}\n", self.canvas.children_len());
-        
+    fn update(
+        &mut self,
+        ctx: &mut UpdateCtx,
+        old_data: &GridCanvasData<T>,
+        data: &GridCanvasData<T>,
+        env: &Env,
+    ) {
         self.canvas.update(ctx, old_data, data, env);
         // self.canvas.update(ctx, data, env);
-
-        let is_forward =  (data.save_data.playback_index as isize - old_data.save_data.playback_index as isize) >= 0;
-        if is_forward {
-            for index in old_data.save_data.playback_index..data.save_data.playback_index {
-                if let Some(item) = data.save_data.tape.get(index) {
-                    item.forward_canvas(self, data);
-                    ctx.children_changed();
-                    // item.forward_canvas(self.canvas.widget_mut(), data);
-                    ctx.request_paint();
-                }
+        let diff = data.grid.clone().difference(old_data.grid.clone());
+        for (grid_index, item) in diff {
+            let from = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
+            if self.canvas.position_map.contains_key(&from.into()) {
+                self.remove_child(from.into())
+            } else {
+                let size = Size::new(data.snap_data.cell_size, data.snap_data.cell_size);
+                let child = GridChild::new(
+                    item.get_short_text(),
+                    item.get_color(),
+                    size,
+                );
+                self.add_child(child, from.into())
             }
-        } else {
-            for index in (data.save_data.playback_index..old_data.save_data.playback_index).rev() {
-                if let Some(item) = data.save_data.tape.get(index) {
-                    item.reverse_canvas(self, data);
-                    ctx.children_changed();
-                    // item.reverse_canvas(self.canvas.widget_mut(), data);
-                    ctx.request_paint();
-                }
-            }
+            ctx.children_changed();
+            ctx.request_paint();
         }
 
-        if old_data.snap_data.pan_data.offset != data.snap_data.pan_data.offset || old_data.snap_data.zoom_data.zoom_scale != data.snap_data.zoom_data.zoom_scale {
+        if old_data.snap_data.pan_data.offset != data.snap_data.pan_data.offset
+            || old_data.snap_data.zoom_data.zoom_scale != data.snap_data.zoom_data.zoom_scale
+        {
             ctx.request_layout()
         }
     }
 
-    fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &GridCanvasData<T>, env: &Env) -> Size {
+    fn layout(
+        &mut self,
+        ctx: &mut LayoutCtx,
+        bc: &BoxConstraints,
+        data: &GridCanvasData<T>,
+        env: &Env,
+    ) -> Size {
         // let origin = Point::new(0., 0.);
         //debug!("Box constraints width: {:?}", bc.max().width);
         //debug!("Box constraints height: {:?}", bc.max().height);
         self.canvas.offset = data.snap_data.pan_data.offset;
         self.canvas.scale = data.snap_data.zoom_data.zoom_scale;
         self.canvas.layout(ctx, bc, data, env);
-        
+
         // self.canvas.set_origin(ctx, data.snap_data.pan_data.absolute_offset);
 
         bc.max()
@@ -530,15 +581,14 @@ impl<T:GridItem + PartialEq + Debug> Widget<GridCanvasData<T>> for GridCanvas<T>
     fn paint(&mut self, ctx: &mut PaintCtx, data: &GridCanvasData<T>, env: &Env) {
         //debug!("Running paint method");
         // Draw grid cells
-        
+
         // let damage_region = ctx.region().clone();
         // Calculate area to render
         // let paint_rectangles = damage_region.rects();
 
-
         ctx.with_save(|ctx| {
             let scale = Affine::scale(data.snap_data.zoom_data.zoom_scale);
-            
+
             // ctx.transform(translate);
             ctx.transform(scale);
 
@@ -562,8 +612,9 @@ impl<T: Data> GridChild<T> {
     pub fn new(text: impl Into<LabelText<T>>, color: Color, size: Size) -> Self {
         // let foo = Label::new(tooltip_text).tooltip();
         let mut label_text = Label::new(text);
+        label_text.set_line_break_mode(druid::widget::LineBreaking::WordWrap);
         label_text.set_text_color(white::ALABASTER);
-        label_text.set_text_size(size.width/3.3);
+        label_text.set_text_size(size.width / 3.3);
         label_text.set_text_alignment(TextAlignment::Center);
 
         GridChild {
@@ -575,14 +626,12 @@ impl<T: Data> GridChild<T> {
     }
 }
 
-impl<T:Data> Widget<T> for GridChild<T> {
+impl<T: Data> Widget<T> for GridChild<T> {
     fn event(&mut self, _ctx: &mut EventCtx, _event: &Event, _data: &mut T, _env: &Env) {
         // Add tooltip logic on hover
-        
     }
 
     fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, data: &T, env: &Env) {
-
         if let LifeCycle::HotChanged(_) | LifeCycle::DisabledChanged(_) = event {
             ctx.request_paint();
         }
@@ -596,6 +645,7 @@ impl<T:Data> Widget<T> for GridChild<T> {
 
     fn update(&mut self, ctx: &mut UpdateCtx, old_data: &T, data: &T, env: &Env) {
         self.label_text.update(ctx, old_data, data, env);
+        ctx.request_paint();
     }
 
     fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &T, env: &Env) -> Size {

@@ -11,16 +11,12 @@ pub struct RotationController {
 #[allow(dead_code)]
 impl RotationController {
     fn new(rotation_step: f64) -> Self {
-        Self {
-            rotation_step,
-        }
+        Self { rotation_step }
     }
 }
 
 impl Default for RotationController {
     fn default() -> Self {
-        Self {
-            rotation_step: 0.1,
-        }
+        Self { rotation_step: 0.1 }
     }
 }
