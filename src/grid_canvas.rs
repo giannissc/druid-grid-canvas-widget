@@ -7,14 +7,15 @@ use druid::{
     UpdateCtx, Widget, WidgetPod,
 };
 use druid_color_thesaurus::white;
+use log::debug;
 ///
 /// Imports
 ///
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-use std::fmt::Debug;
+use std::{fmt::Debug, time::Instant};
 
 use crate::{
-    canvas::{Canvas, Child, PointKey}, snapping::GridSnapData, utils::cassetta::{Cassetta, TapeItem}, GridAction, GridIndex, GridItem, GridState,
+    canvas::{Canvas, Child, PointKey}, snapping::GridSnapData, utils::cassetta::{Cassetta, CassettePlayer, TapeItem}, GridAction, GridIndex, GridItem, GridState,
 };
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -60,6 +61,7 @@ where
 
     // Basic Grid methods
     fn add_node(&mut self, pos: &GridIndex, item: T) -> bool {
+        self.save_data.clear_delta();
         let option = self.grid.get(pos);
 
         let command_item;
@@ -78,6 +80,7 @@ where
     }
 
     fn remove_node(&mut self, pos: &GridIndex) -> bool {
+        self.save_data.clear_delta();
         if let Some(item) = self.grid.remove(pos) {
             if item.can_remove() {
                 let command_item = TapeItem::Remove(*pos, item);
@@ -90,6 +93,7 @@ where
         false
     }
     fn move_node(&mut self, from: &GridIndex, to: &GridIndex) -> bool {
+        self.save_data.clear_delta();
         let item = self.grid.get(from).unwrap();
         let other = self.grid.get(to);
         if item.can_move(other) {
@@ -286,52 +290,54 @@ where
     // different containers
     // A third method
     pub fn add_child(&mut self, child: impl Widget<GridCanvasData<T>> + 'static, from: PointKey) {
-        let delete_index = self.canvas.position_map.remove(&from);
+        let canvas =  &mut self.canvas;
+        let delete_index = canvas.position_map.remove(&from);
 
         if let Some(delete_index) = delete_index {
-            let last_index = self.canvas.children.len() - 1;
-            let child = self.canvas.children.remove(last_index);
+            let last_index = canvas.children.len() - 1;
+            let child = canvas.children.remove(last_index);
             if last_index != delete_index {
                 // Update position map
                 if let Child::Explicit { position, .. } = &child {
                     let key: PointKey = <Point as Into<PointKey>>::into(*position);
-                    self.canvas.position_map.remove(&key);
-                    self.canvas.position_map.insert(key, delete_index);
+                    canvas.position_map.remove(&key);
+                    canvas.position_map.insert(key, delete_index);
                 }
-                self.canvas.children.remove(delete_index);
-                self.canvas.children.insert(delete_index, child);
+                canvas.children.remove(delete_index);
+                canvas.children.insert(delete_index, child);
             }
         }
 
         let inner: WidgetPod<GridCanvasData<T>, Box<dyn Widget<GridCanvasData<T>>>> =
             WidgetPod::new(Box::new(child));
-        let index = self.canvas.children.len();
-        self.canvas.children.insert(
+        let index = canvas.children.len();
+        canvas.children.insert(
             index,
             Child::Explicit {
                 inner,
                 position: from.clone().into(),
             },
         );
-        self.canvas.position_map.insert(from, index);
+        canvas.position_map.insert(from, index);
     }
 
     // For index based layout containers the position will be replaced by an index
     pub fn remove_child(&mut self, from: PointKey) {
         // Swap item at index with last item and then delete
-        let delete_index = self.canvas.position_map.remove(&from);
-        let last_index = self.canvas.children.len() - 1;
+        let canvas = &mut self.canvas;
+        let delete_index = canvas.position_map.remove(&from);
+        let last_index = canvas.children.len() - 1;
         if let Some(delete_index) = delete_index {
-            let child = self.canvas.children.remove(last_index);
+            let child = canvas.children.remove(last_index);
             if last_index != delete_index {
                 // Update position map
                 if let Child::Explicit { position, .. } = &child {
                     let key: PointKey = <Point as Into<PointKey>>::into(*position);
-                    self.canvas.position_map.remove(&key);
-                    self.canvas.position_map.insert(key, delete_index);
+                    canvas.position_map.remove(&key);
+                    canvas.position_map.insert(key, delete_index);
                 }
-                self.canvas.children.remove(delete_index);
-                self.canvas.children.insert(delete_index, child);
+                canvas.children.remove(delete_index);
+                canvas.children.insert(delete_index, child);
             }
         }
     }
@@ -341,29 +347,125 @@ where
     // to remove the the exist at the to position. Useful for drag and drop within the
     // same container
     pub fn move_child(&mut self, from: PointKey, to: PointKey) {
-        let index_from = self.canvas.position_map.remove(&from);
-        let index_to = self.canvas.position_map.remove(&to);
-
-        if let Some(index) = index_to {
-            self.canvas.children.remove(index);
-        }
+        let canvas = &mut self.canvas;
+        let index_from = canvas.position_map.remove(&from);
 
         if let Some(old_index) = index_from {
-            let inner = self.canvas.children.remove(old_index);
+            let inner = canvas.children.remove(old_index);
             match inner {
                 Child::Explicit { inner, .. } => {
-                    let index = self.canvas.children.len();
-                    self.canvas.children.insert(
+                    let index = canvas.children.len();
+                    canvas.children.insert(
                         index,
                         Child::Explicit {
                             inner,
                             position: to.clone().into(),
                         },
                     );
-                    self.canvas.position_map.insert(from, index);
+                    canvas.position_map.insert(to, index);
                 }
-                _ => (),
+                _ => panic!(),
             }
+        }
+    }
+
+    fn advance(&mut self, item: TapeItem<GridIndex, T>, data: &GridCanvasData<T>) {
+        let size = Size::new(data.snap_data.cell_size, data.snap_data.cell_size);
+        match item {
+            TapeItem::Add(grid_index, item, _) => {
+                let from: PointKey = data.snap_data.get_grid_position(grid_index.row, grid_index.col).into();
+                let child = GridChild::new(
+                    item.get_short_text(),
+                    item.get_color(),
+                    size,
+                );
+                self.add_child(child, from);
+            },
+            TapeItem::Remove(grid_index, _) => {
+                let from: PointKey = data.snap_data.get_grid_position(grid_index.row, grid_index.col).into();
+                self.remove_child(from);
+            },
+            TapeItem::Move(from_grid_index, to_grid_index, _) => {
+                let from: PointKey = data.snap_data.get_grid_position(from_grid_index.row, from_grid_index.col).into();
+                let to: PointKey = data.snap_data.get_grid_position(to_grid_index.row, to_grid_index.col).into();
+                self.move_child(from, to);
+            },
+            TapeItem::BatchAdd(items) => {
+                for (grid_index, (item, _)) in items.into_iter(){
+                    let from: PointKey = data.snap_data.get_grid_position(grid_index.row, grid_index.col).into();
+                    let child = GridChild::new(
+                        item.get_short_text(),
+                        item.get_color(),
+                        size,
+                    );
+                    self.add_child(child, from);
+                }
+            },
+            TapeItem::BatchRemove(items) => {
+                for (grid_index, _) in items{
+                    let from: PointKey = data.snap_data.get_grid_position(grid_index.row, grid_index.col).into();
+                    self.remove_child(from);
+                }
+            },
+            
+        }
+    }
+
+    fn rewind(&mut self, item: TapeItem<GridIndex, T>, data: &GridCanvasData<T>) {
+        let size = Size::new(data.snap_data.cell_size, data.snap_data.cell_size);
+        match item {
+            TapeItem::Add(grid_index, _, previous_item) => {
+                let from: PointKey = data.snap_data.get_grid_position(grid_index.row, grid_index.col).into();
+                self.remove_child(from.clone());
+                if let Some(item) = previous_item {
+                    let child = GridChild::new(
+                        item.get_short_text(),
+                        item.get_color(),
+                        size,
+                    );
+                    self.add_child(child, from);
+                }
+            },
+            TapeItem::Remove(grid_index, previous_item) => {
+                let from: PointKey = data.snap_data.get_grid_position(grid_index.row, grid_index.col).into();
+                let child = GridChild::new(
+                    previous_item.get_short_text(),
+                    previous_item.get_color(),
+                    size,
+                );
+                self.add_child(child, from);
+            },
+            TapeItem::Move(from_grid_index, to_grid_index, _) => {
+                let from: PointKey = data.snap_data.get_grid_position(from_grid_index.row, from_grid_index.col).into();
+                let to: PointKey = data.snap_data.get_grid_position(to_grid_index.row, to_grid_index.col).into();
+                self.move_child(to, from);
+            },
+            TapeItem::BatchAdd(items) => {
+                for (grid_index, (_, previous_item)) in items.into_iter(){
+                    let from: PointKey = data.snap_data.get_grid_position(grid_index.row, grid_index.col).into();
+                    self.remove_child(from.clone());
+                    if let Some(item) = previous_item{
+                        let child = GridChild::new(
+                            item.get_short_text(),
+                            item.get_color(),
+                            size,
+                        );
+                        self.add_child(child, from);
+                    }
+                }
+            },
+            TapeItem::BatchRemove(items) => {
+                for (grid_index, item) in items{
+                    let from: PointKey = data.snap_data.get_grid_position(grid_index.row, grid_index.col).into();
+                    let child = GridChild::new(
+                        item.get_short_text(),
+                        item.get_color(),
+                        size,
+                    );
+                    self.add_child(child, from);
+                }
+            },
+            
         }
     }
 }
@@ -544,25 +646,22 @@ where
     ) {
         self.canvas.update(ctx, old_data, data, env);
         // self.canvas.update(ctx, data, env);
-        let diff = data.grid.clone().difference(old_data.grid.clone());
-        // println!("{:?}", diff);
+        debug!("\n{:?}",Instant::now());
+        debug!("add item: {:?}", data.save_data.add_delta);
+        for item in data.save_data.add_delta.iter(){
+            self.advance(item.clone(), data);
+            ctx.children_changed();
+            ctx.request_paint();
+            
+        }
 
-        for (grid_index, item) in diff {
-            let from = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
-            if self.canvas.position_map.contains_key(&from.into()) {
-                self.remove_child(from.into())
-            } else {
-                let size = Size::new(data.snap_data.cell_size, data.snap_data.cell_size);
-                let child = GridChild::new(
-                    item.get_short_text(),
-                    item.get_color(),
-                    size,
-                );
-                self.add_child(child, from.into())
-            }
+        debug!("delete item: {:?}", data.save_data.remove_delta);
+        for item in data.save_data.remove_delta.iter(){
+            self.rewind(item.clone(), data);
             ctx.children_changed();
             ctx.request_paint();
         }
+
 
         if old_data.snap_data.pan_data.offset != data.snap_data.pan_data.offset
             || old_data.snap_data.zoom_data.zoom_scale != data.snap_data.zoom_data.zoom_scale

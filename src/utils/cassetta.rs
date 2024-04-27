@@ -18,6 +18,8 @@ use std::{fmt::Debug, hash::Hash};
 pub struct Cassetta<T: Clone + Debug> {
     pub undo_tape: Vector<T>,
     pub redo_tape: Vector<T>,
+    pub add_delta: Vector<T>,
+    pub remove_delta: Vector<T>,
 }
 
 impl<T: Clone + Debug> Cassetta<T> {
@@ -25,41 +27,58 @@ impl<T: Clone + Debug> Cassetta<T> {
         Self {
             undo_tape: Vector::new(),
             redo_tape: Vector::new(),
+            add_delta: Vector::new(),
+            remove_delta: Vector::new(),
         }
     }
 
     pub fn insert(&mut self, item: T) {
+        self.clear_delta();
         self.redo_tape.clear();
         self.redo_tape.push_back(item);
     }
 
     pub fn insert_and_play(&mut self, item: T) {
-        self.undo_tape.push_back(item);
+        self.clear_delta();
         self.redo_tape.clear();
+        self.undo_tape.push_back(item.clone());
+        self.add_delta.push_back(item);
     }
 
     pub fn append(&mut self, other: Vector<T>) {
+        self.clear_delta();
         self.redo_tape.clear();
         self.redo_tape.append(other);
     }
 
     pub fn append_and_play(&mut self, other: Vector<T>) {
-        self.undo_tape.append(other);
+        self.clear_delta();
         self.redo_tape.clear();
+        self.undo_tape.append(other.clone());
+        self.add_delta.append(other)
+    }
+
+    pub fn clear_delta(&mut self) {
+        self.add_delta.clear();
+        self.remove_delta.clear();
     }
 
     pub fn undo(&mut self) -> Option<T> {
+        self.clear_delta();
         let item = self.undo_tape.pop_back();
         if let Some(item) = item.clone() {
-            self.redo_tape.push_back(item);
+            self.redo_tape.push_front(item.clone());
+            self.remove_delta.push_front(item);
         }
         item
     }
 
     pub fn redo(&mut self) -> Option<T> {
-        let item = self.redo_tape.pop_back();
+        self.clear_delta();
+        let item = self.redo_tape.pop_front();
         if let Some(item) = item.clone() {
-            self.undo_tape.push_back(item);
+            self.undo_tape.push_back(item.clone());
+            self.add_delta.push_back(item);
         }
         item
     }
