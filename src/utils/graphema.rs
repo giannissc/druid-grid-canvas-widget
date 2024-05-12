@@ -1275,11 +1275,12 @@ mod tests {
         assert_eq!(result_graph.edge_count(), expected_graph.edge_count());
     }
     #[test]
-    fn as_bitvec(){
-                let mut lattice = Lattice2D::new(5, 5);
+    fn as_bitvec() {
+        let mut lattice = Lattice2D::new(5, 5);
         let size = lattice.size();
         lattice.clear();
-        let expected_bitvec = bitvec![1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0,];
+        let expected_bitvec =
+            bitvec![1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0,];
         lattice.add_vertex_vector(expected_bitvec.clone());
         let result_bitvec = lattice.clone().as_bitvec();
         assert_eq!(expected_bitvec, result_bitvec);

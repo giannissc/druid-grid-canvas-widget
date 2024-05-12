@@ -12,7 +12,6 @@ use std::hash::Hash;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub mod utils;
 pub mod canvas;
 pub mod grid_canvas;
 ///
@@ -22,7 +21,7 @@ pub mod grid_canvas;
 pub mod panning;
 pub mod rotation;
 pub mod snapping;
-
+pub mod utils;
 
 pub mod zooming;
 
@@ -31,7 +30,7 @@ pub mod zooming;
 /// GridIndex
 ///
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Data,)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Data)]
 pub struct GridIndex {
     pub row: isize,
     pub col: isize,

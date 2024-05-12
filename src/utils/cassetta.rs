@@ -85,7 +85,10 @@ impl<T: Clone + Debug> Cassetta<T> {
 }
 
 #[derive(Clone, Debug, PartialEq, Data)]
-pub enum TapeItem<K, V> where K: Clone + Debug + Hash + Eq{
+pub enum TapeItem<K, V>
+where
+    K: Clone + Debug + Hash + Eq,
+{
     Add(K, V, Option<V>),
     Remove(K, V),
     Move(K, K, V),
@@ -94,7 +97,10 @@ pub enum TapeItem<K, V> where K: Clone + Debug + Hash + Eq{
     // BatchMove(HashMap<K, (K, V)>)
 }
 
-pub trait CassettePlayer<K, V> where K: Clone + Debug + Hash + Eq{
+pub trait CassettePlayer<K, V>
+where
+    K: Clone + Debug + Hash + Eq,
+{
     fn advance(&mut self, item: TapeItem<K, V>);
     fn rewind(&mut self, item: TapeItem<K, V>);
 }

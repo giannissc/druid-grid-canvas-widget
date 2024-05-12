@@ -282,7 +282,7 @@ fn main() {
         None,
     ));
 
-    // data.grid_data.submit_to_stack_and_process(pattern);
+    data.grid_data.submit_to_stack_and_process(pattern);
     // data.grid_data.submit_to_stack(pattern);
 
     AppLauncher::with_window(main_window)

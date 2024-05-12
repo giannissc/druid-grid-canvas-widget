@@ -1,4 +1,9 @@
-use std::{cmp::Ordering, collections::HashMap, hash::{Hash, Hasher}, fmt::Debug};
+use std::{
+    cmp::Ordering,
+    collections::HashMap,
+    fmt::Debug,
+    hash::{Hash, Hasher},
+};
 
 use graph_builder::{index::Idx, UndirectedCsrGraph};
 
@@ -8,21 +13,23 @@ use crate::utils::cassetta::TapeItem;
 /// Convert to builder pattern
 /// In the default case only the graph and source node are needed and the target and edge cost function can be added iteratively
 pub trait ShortestPath {
-    fn compute(&mut self, config:ShortestPathConfig, source: usize) -> Vec<TapeItem<(usize, usize), NodeType<Net>>>;
-    fn reconstruct_path(&mut self) -> Vec<TapeItem<(usize, usize),NodeType<Net>>>;
+    fn compute(
+        &mut self,
+        config: ShortestPathConfig,
+        source: usize,
+    ) -> Vec<TapeItem<(usize, usize), NodeType<Net>>>;
+    fn reconstruct_path(&mut self) -> Vec<TapeItem<(usize, usize), NodeType<Net>>>;
     fn get_next_unresolved(&mut self) -> Option<PathNode>;
     fn get_next_path_node(&self) -> Option<PathNode>;
 }
 
-pub struct ShortestPathConfig
-{
+pub struct ShortestPathConfig {
     pub graph: UndirectedCsrGraph<usize, usize>,
     pub goal: Option<usize>,
     pub boundary: (usize, usize),
 }
 
-pub struct ShortestPathAlgo
-{
+pub struct ShortestPathAlgo {
     config: ShortestPathConfig,
     algo_map: HashMap<String, Box<dyn ShortestPath>>,
     algo: Box<dyn ShortestPath>,
@@ -71,14 +78,22 @@ impl PathHeuristic {
         let from_row = from.1 as isize;
 
         let to_col = to.0 as isize;
-        let to_row= to.1 as isize;
+        let to_row = to.1 as isize;
 
         match self {
-            PathHeuristic::Manhattan => {((from_col - to_col).abs() + (from_row - to_row).abs()) as usize} ,
-            PathHeuristic::Euclidean => {((from_col - to_col).abs().pow(2) + (from_row - to_row).abs().pow(2)) as usize},
-            PathHeuristic::Octile => {((from_col - to_col).abs().max((from_row - to_row).abs())) as usize},
-            PathHeuristic::Chebyshev => {((from_col - to_col).abs().max((from_row - to_row).abs())) as usize},
-            PathHeuristic::Zero => {0},
+            PathHeuristic::Manhattan => {
+                ((from_col - to_col).abs() + (from_row - to_row).abs()) as usize
+            }
+            PathHeuristic::Euclidean => {
+                ((from_col - to_col).abs().pow(2) + (from_row - to_row).abs().pow(2)) as usize
+            }
+            PathHeuristic::Octile => {
+                ((from_col - to_col).abs().max((from_row - to_row).abs())) as usize
+            }
+            PathHeuristic::Chebyshev => {
+                ((from_col - to_col).abs().max((from_row - to_row).abs())) as usize
+            }
+            PathHeuristic::Zero => 0,
         }
     }
 }
@@ -98,7 +113,13 @@ pub struct PathNode {
 }
 
 impl PathNode {
-    pub fn new(from: (usize, usize), cost_from_start: usize,  to: (usize, usize), distance_heuristic: PathHeuristic, orientation_cost: usize) -> Self {
+    pub fn new(
+        from: (usize, usize),
+        cost_from_start: usize,
+        to: (usize, usize),
+        distance_heuristic: PathHeuristic,
+        orientation_cost: usize,
+    ) -> Self {
         let cost_to_target = distance_heuristic.cost_estimate(from, to);
         let cost_ord = cost_from_start + cost_to_target;
         Self {
@@ -124,7 +145,11 @@ impl PathNode {
         self
     }
 
-    pub fn with_cost_estimation(mut self, to: (usize, usize), distance_heuristic: PathHeuristic) -> Self {
+    pub fn with_cost_estimation(
+        mut self,
+        to: (usize, usize),
+        distance_heuristic: PathHeuristic,
+    ) -> Self {
         let target_cost = distance_heuristic.cost_estimate(self.position, to);
         self.cost_to_target = Some(target_cost);
         self.cost_total = self.cost_from_start + target_cost;
@@ -135,7 +160,6 @@ impl PathNode {
         self.orientation_cost = orientation_cost;
         self
     }
-
 }
 
 impl PartialEq for PathNode {
@@ -153,7 +177,7 @@ impl Hash for PathNode {
 impl PartialOrd for PathNode {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         let order_option = self.cost_total.partial_cmp(&other.cost_total);
-        match order_option{
+        match order_option {
             Some(order) => {
                 if let Ordering::Equal = order {
                     if self.orientation_cost > other.orientation_cost {
@@ -166,7 +190,7 @@ impl PartialOrd for PathNode {
                 } else {
                     Some(order)
                 }
-            },
+            }
             None => return None,
         }
     }
@@ -174,7 +198,7 @@ impl PartialOrd for PathNode {
 
 impl Ord for PathNode {
     fn cmp(&self, other: &Self) -> Ordering {
-        let order  = self.cost_total.cmp(&other.cost_total);
+        let order = self.cost_total.cmp(&other.cost_total);
 
         if let Ordering::Equal = order {
             if self.orientation_cost > other.orientation_cost {
@@ -192,7 +216,7 @@ impl Ord for PathNode {
 
 //////////////////////////////////////////////////////////////////////////////////////
 //
-// GridNodeType
+// NodeType
 //
 //////////////////////////////////////////////////////////////////////////////////////
 // Add wight and bomb nodes?
@@ -207,13 +231,13 @@ pub enum NodeType<Net> {
     Target(Net),
     //SteinerNode(Net),
     Unresolved(Cost),
-    Resolved(Cost), 
+    Resolved(Cost),
     Route(Net, Cost),
 }
 
 impl NodeType<Net> {
-    pub fn get_net(&self) -> Option<&Net>{
-        match self{
+    pub fn get_net(&self) -> Option<&Net> {
+        match self {
             Self::Start(net) => Some(net),
             Self::Target(net) => Some(net),
             Self::Route(net, _) => Some(net),
@@ -222,12 +246,11 @@ impl NodeType<Net> {
     }
 
     pub fn get_cost(&self) -> Option<&Cost> {
-        match  self {
+        match self {
             Self::Unresolved(cost) => Some(cost),
             Self::Resolved(cost) => Some(cost),
             Self::Route(_, cost) => Some(cost),
             _ => None,
-            
         }
     }
 }
