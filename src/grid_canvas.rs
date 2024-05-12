@@ -15,7 +15,10 @@ use log::debug;
 use std::{fmt::Debug, time::Instant};
 
 use crate::{
-    canvas::{Canvas, Child, PointKey}, snapping::GridSnapData, utils::cassetta::{Cassetta, CassettePlayer, TapeItem}, GridAction, GridIndex, GridItem, GridState,
+    canvas::{Canvas, Child, PointKey},
+    snapping::GridSnapData,
+    utils::cassetta::{Cassetta, CassettePlayer, TapeItem},
+    GridAction, GridIndex, GridItem, GridState,
 };
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -199,10 +202,24 @@ where
         for stack_item in list {
             match stack_item {
                 TapeItem::Add(pos, current_item, _) => {
-                    let option = self.grid.get(&pos);
-                    if current_item.can_add(option) {
+                    let other = self.grid.get(&pos);
+                    if current_item.can_add(other) {
                         stack_list.push_back(stack_item);
                         pos_map.insert(pos, current_item);
+                    }
+                }
+                TapeItem::Remove(pos, current_item) => {
+                    if current_item.can_remove() {
+                        stack_list.push_back(stack_item);
+                        pos_map.remove(&pos);
+                    }
+                }
+                TapeItem::Move(from_pos, to_pos, current_item) => {
+                    let other = self.grid.get(&to_pos);
+                    if current_item.can_move(other) {
+                        stack_list.push_back(stack_item);
+                        pos_map.remove(&from_pos);
+                        pos_map.insert(to_pos, current_item);
                     }
                 }
                 TapeItem::BatchAdd(mut map) => {
@@ -218,7 +235,17 @@ where
                         stack_list.push_back(TapeItem::BatchAdd(map));
                     }
                 }
-                _ => (),
+                TapeItem::BatchRemove(mut map) => {
+                    map.retain(|pos, current_item| {
+                        if current_item.can_remove() {
+                            pos_map.remove(pos);
+                        }
+                        current_item.can_remove()
+                    });
+                    if !map.is_empty() {
+                        stack_list.push_back(TapeItem::BatchRemove(map));
+                    }
+                }
             }
         }
         (pos_map, stack_list)
@@ -290,7 +317,7 @@ where
     // different containers
     // A third method
     pub fn add_child(&mut self, child: impl Widget<GridCanvasData<T>> + 'static, from: PointKey) {
-        let canvas =  &mut self.canvas;
+        let canvas = &mut self.canvas;
         let delete_index = canvas.position_map.remove(&from);
 
         if let Some(delete_index) = delete_index {
@@ -373,41 +400,50 @@ where
         let size = Size::new(data.snap_data.cell_size, data.snap_data.cell_size);
         match item {
             TapeItem::Add(grid_index, item, _) => {
-                let from: PointKey = data.snap_data.get_grid_position(grid_index.row, grid_index.col).into();
-                let child = GridChild::new(
-                    item.get_short_text(),
-                    item.get_color(),
-                    size,
-                );
+                let from: PointKey = data
+                    .snap_data
+                    .get_grid_position(grid_index.row, grid_index.col)
+                    .into();
+                let child = GridChild::new(item.get_short_text(), item.get_color(), size);
                 self.add_child(child, from);
-            },
+            }
             TapeItem::Remove(grid_index, _) => {
-                let from: PointKey = data.snap_data.get_grid_position(grid_index.row, grid_index.col).into();
+                let from: PointKey = data
+                    .snap_data
+                    .get_grid_position(grid_index.row, grid_index.col)
+                    .into();
                 self.remove_child(from);
-            },
+            }
             TapeItem::Move(from_grid_index, to_grid_index, _) => {
-                let from: PointKey = data.snap_data.get_grid_position(from_grid_index.row, from_grid_index.col).into();
-                let to: PointKey = data.snap_data.get_grid_position(to_grid_index.row, to_grid_index.col).into();
+                let from: PointKey = data
+                    .snap_data
+                    .get_grid_position(from_grid_index.row, from_grid_index.col)
+                    .into();
+                let to: PointKey = data
+                    .snap_data
+                    .get_grid_position(to_grid_index.row, to_grid_index.col)
+                    .into();
                 self.move_child(from, to);
-            },
+            }
             TapeItem::BatchAdd(items) => {
-                for (grid_index, (item, _)) in items.into_iter(){
-                    let from: PointKey = data.snap_data.get_grid_position(grid_index.row, grid_index.col).into();
-                    let child = GridChild::new(
-                        item.get_short_text(),
-                        item.get_color(),
-                        size,
-                    );
+                for (grid_index, (item, _)) in items.into_iter() {
+                    let from: PointKey = data
+                        .snap_data
+                        .get_grid_position(grid_index.row, grid_index.col)
+                        .into();
+                    let child = GridChild::new(item.get_short_text(), item.get_color(), size);
                     self.add_child(child, from);
                 }
-            },
+            }
             TapeItem::BatchRemove(items) => {
-                for (grid_index, _) in items{
-                    let from: PointKey = data.snap_data.get_grid_position(grid_index.row, grid_index.col).into();
+                for (grid_index, _) in items {
+                    let from: PointKey = data
+                        .snap_data
+                        .get_grid_position(grid_index.row, grid_index.col)
+                        .into();
                     self.remove_child(from);
                 }
-            },
-            
+            }
         }
     }
 
@@ -415,57 +451,62 @@ where
         let size = Size::new(data.snap_data.cell_size, data.snap_data.cell_size);
         match item {
             TapeItem::Add(grid_index, _, previous_item) => {
-                let from: PointKey = data.snap_data.get_grid_position(grid_index.row, grid_index.col).into();
+                let from: PointKey = data
+                    .snap_data
+                    .get_grid_position(grid_index.row, grid_index.col)
+                    .into();
                 self.remove_child(from.clone());
                 if let Some(item) = previous_item {
-                    let child = GridChild::new(
-                        item.get_short_text(),
-                        item.get_color(),
-                        size,
-                    );
+                    let child = GridChild::new(item.get_short_text(), item.get_color(), size);
                     self.add_child(child, from);
                 }
-            },
+            }
             TapeItem::Remove(grid_index, previous_item) => {
-                let from: PointKey = data.snap_data.get_grid_position(grid_index.row, grid_index.col).into();
+                let from: PointKey = data
+                    .snap_data
+                    .get_grid_position(grid_index.row, grid_index.col)
+                    .into();
                 let child = GridChild::new(
                     previous_item.get_short_text(),
                     previous_item.get_color(),
                     size,
                 );
                 self.add_child(child, from);
-            },
+            }
             TapeItem::Move(from_grid_index, to_grid_index, _) => {
-                let from: PointKey = data.snap_data.get_grid_position(from_grid_index.row, from_grid_index.col).into();
-                let to: PointKey = data.snap_data.get_grid_position(to_grid_index.row, to_grid_index.col).into();
+                let from: PointKey = data
+                    .snap_data
+                    .get_grid_position(from_grid_index.row, from_grid_index.col)
+                    .into();
+                let to: PointKey = data
+                    .snap_data
+                    .get_grid_position(to_grid_index.row, to_grid_index.col)
+                    .into();
                 self.move_child(to, from);
-            },
+            }
             TapeItem::BatchAdd(items) => {
-                for (grid_index, (_, previous_item)) in items.into_iter(){
-                    let from: PointKey = data.snap_data.get_grid_position(grid_index.row, grid_index.col).into();
+                for (grid_index, (_, previous_item)) in items.into_iter() {
+                    let from: PointKey = data
+                        .snap_data
+                        .get_grid_position(grid_index.row, grid_index.col)
+                        .into();
                     self.remove_child(from.clone());
-                    if let Some(item) = previous_item{
-                        let child = GridChild::new(
-                            item.get_short_text(),
-                            item.get_color(),
-                            size,
-                        );
+                    if let Some(item) = previous_item {
+                        let child = GridChild::new(item.get_short_text(), item.get_color(), size);
                         self.add_child(child, from);
                     }
                 }
-            },
+            }
             TapeItem::BatchRemove(items) => {
-                for (grid_index, item) in items{
-                    let from: PointKey = data.snap_data.get_grid_position(grid_index.row, grid_index.col).into();
-                    let child = GridChild::new(
-                        item.get_short_text(),
-                        item.get_color(),
-                        size,
-                    );
+                for (grid_index, item) in items {
+                    let from: PointKey = data
+                        .snap_data
+                        .get_grid_position(grid_index.row, grid_index.col)
+                        .into();
+                    let child = GridChild::new(item.get_short_text(), item.get_color(), size);
                     self.add_child(child, from);
                 }
-            },
-            
+            }
         }
     }
 }
@@ -622,13 +663,11 @@ where
         // TODO: Handle ViewContext Changed
         if let LifeCycle::WidgetAdded = event {
             for (grid_index, item) in data.grid.iter() {
-                let from = data.snap_data.get_grid_position(grid_index.row, grid_index.col);
+                let from = data
+                    .snap_data
+                    .get_grid_position(grid_index.row, grid_index.col);
                 let size = Size::new(data.snap_data.cell_size, data.snap_data.cell_size);
-                let child = GridChild::new(
-                    item.get_short_text(),
-                    item.get_color(),
-                    size,
-                );
+                let child = GridChild::new(item.get_short_text(), item.get_color(), size);
                 self.add_child(child, from.into())
             }
             ctx.children_changed();
@@ -646,22 +685,20 @@ where
     ) {
         self.canvas.update(ctx, old_data, data, env);
         // self.canvas.update(ctx, data, env);
-        debug!("\n{:?}",Instant::now());
+        debug!("\n{:?}", Instant::now());
         debug!("add item: {:?}", data.save_data.add_delta);
-        for item in data.save_data.add_delta.iter(){
+        for item in data.save_data.add_delta.iter() {
             self.advance(item.clone(), data);
             ctx.children_changed();
             ctx.request_paint();
-            
         }
 
         debug!("delete item: {:?}", data.save_data.remove_delta);
-        for item in data.save_data.remove_delta.iter(){
+        for item in data.save_data.remove_delta.iter() {
             self.rewind(item.clone(), data);
             ctx.children_changed();
             ctx.request_paint();
         }
-
 
         if old_data.snap_data.pan_data.offset != data.snap_data.pan_data.offset
             || old_data.snap_data.zoom_data.zoom_scale != data.snap_data.zoom_data.zoom_scale
