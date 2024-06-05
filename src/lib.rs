@@ -36,6 +36,15 @@ pub struct GridIndex {
     pub col: isize,
 }
 
+impl From<(isize, isize)> for GridIndex {
+    fn from((row, col): (isize, isize)) -> Self {
+        Self {
+            row,
+            col,
+        }
+    }
+}
+
 impl GridIndex {
     pub fn new(row: isize, col: isize) -> Self {
         Self { row, col }
